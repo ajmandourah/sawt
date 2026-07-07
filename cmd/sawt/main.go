@@ -45,11 +45,14 @@ func main() {
 	// Create queue manager
 	qm := queue.New(engine)
 
-	// Create source resolver chain
+	// Create source resolver chain (order matters):
+	// 1. LocalResolver — files & directories
+	// 2. YtDlpResolver — YouTube, SoundCloud, etc. (tried before DirectResolver)
+	// 3. DirectResolver — plain HTTP streams (fallback if yt-dlp can't resolve)
 	chain := source.NewChain(
 		&source.LocalResolver{},
-		&source.DirectResolver{},
 		source.NewYtDlpResolver(cfg.YtDlpPath),
+		&source.DirectResolver{},
 	)
 
 	// Setup command dispatcher

@@ -77,12 +77,19 @@ func (d *Dispatcher) Dispatch(source *gumble.User, action *Action) string {
 	return h(source, action)
 }
 
-// stripHTML removes all HTML tags from a string.
-// Mumble auto-wraps URLs in <a href="...">...</a> tags.
+// stripHTML removes all HTML tags from a string and decodes HTML entities.
+// Mumble auto-wraps URLs in <a href="...">...</a> tags and escapes entities.
 var htmlTagRe = regexp.MustCompile(`<[^>]+>`)
 
 func stripHTML(s string) string {
-	return htmlTagRe.ReplaceAllString(s, "")
+	s = htmlTagRe.ReplaceAllString(s, "")
+	// Decode common HTML entities that Mumble inserts.
+	s = strings.ReplaceAll(s, "&amp;", "&")
+	s = strings.ReplaceAll(s, "&lt;", "<")
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	s = strings.ReplaceAll(s, "&quot;", `"`)
+	s = strings.ReplaceAll(s, "&#39;", "'")
+	return s
 }
 
 // ListCommands returns all registered command names.

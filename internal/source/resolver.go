@@ -40,17 +40,23 @@ func NewChain(resolvers ...Resolver) *Chain {
 }
 
 // Resolve tries each resolver in order until one succeeds.
-// Returns ErrNoResolver if no resolver could handle the input.
+// If a resolver's Resolve() returns an error, the chain falls through
+// to the next resolver. Returns an error only if no resolver could handle.
 func (c *Chain) Resolve(ctx context.Context, input string) (*ResolvedSource, error) {
+	var lastErr error
 	for _, r := range c.resolvers {
 		if !r.CanHandle(input) {
 			continue
 		}
 		src, err := r.Resolve(ctx, input)
 		if err != nil {
-			return nil, fmt.Errorf("resolve %T: %w", r, err)
+			lastErr = err
+			continue // try next resolver
 		}
 		return src, nil
+	}
+	if lastErr != nil {
+		return nil, lastErr
 	}
 	return nil, fmt.Errorf("no resolver could handle input")
 }
