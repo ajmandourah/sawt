@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/ladis/sawt/internal/source"
 )
 
 const (
@@ -338,16 +340,7 @@ func (e *Engine) GetStartupError() string {
 // Track represents a playable audio source.
 type Track struct {
 	Title       string
-	Source      string     // resolved URL or file path
-	SourceType  SourceType // how the source was obtained
-	RequestedBy string     // Mumble username who requested
+	Source      string            // resolved URL or file path
+	SourceType  source.SourceType // how the source was obtained
+	RequestedBy string            // Mumble username who requested
 }
-
-// SourceType indicates how a track was resolved.
-type SourceType string
-
-const (
-	SourceDirect SourceType = "direct"
-	SourceLocal  SourceType = "local"
-	SourceYtDlp  SourceType = "ytdlp"
-)

@@ -2,14 +2,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
+	"time"
 
 	"layeh.com/gumble/gumble"
 
@@ -18,6 +18,7 @@ import (
 	"github.com/ladis/sawt/internal/config"
 	"github.com/ladis/sawt/internal/mumble"
 	"github.com/ladis/sawt/internal/queue"
+	"github.com/ladis/sawt/internal/source"
 )
 
 func main() {
@@ -44,9 +45,16 @@ func main() {
 	// Create queue manager
 	qm := queue.New(engine)
 
+	// Create source resolver chain
+	chain := source.NewChain(
+		&source.LocalResolver{},
+		&source.DirectResolver{},
+		source.NewYtDlpResolver(cfg.YtDlpPath),
+	)
+
 	// Setup command dispatcher
 	dispatcher := command.New(cfg.Prefix)
-	setupCommands(dispatcher, client, qm, cfg)
+	setupCommands(dispatcher, client, qm, chain, cfg)
 
 	// Register text handler
 	client.SetTextHandler(func(user *gumble.User, message string) {
@@ -73,7 +81,7 @@ func main() {
 	os.Exit(0)
 }
 
-func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manager, cfg *config.Config) {
+func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manager, chain *source.Chain, cfg *config.Config) {
 	// !help
 	d.Register("help", func(user *gumble.User, action *command.Action) string {
 		return fmt.Sprintf(`<b><font color="#7cfc00">Sawt (صوت)</font></b> — Mumble Music Bot<br><br>
@@ -102,49 +110,29 @@ func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manag
 			return fmt.Sprintf("Usage: %splay <file|url|directory>", cfg.Prefix)
 		}
 
-		source := strings.TrimSpace(action.Args)
+		input := strings.TrimSpace(action.Args)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-		// Handle directory
-		if config.IsDirectory(source) {
-			return handleDirectory(user, source, qm, cfg)
+		// Try directory first
+		if config.IsDirectory(input) {
+			return handleDirResolve(ctx, user, input, chain, qm)
 		}
 
-		// Handle URL (direct HTTP stream) — check before local file
-		if isURL(source) {
-			track := &audio.Track{
-				Title:       source,
-				Source:      source,
-				SourceType:  audio.SourceDirect,
-				RequestedBy: user.Name,
-			}
-			qm.Enqueue(track)
-			return fmt.Sprintf("▶ Playing: %s", source)
-		}
-
-		// Handle local file — validate it exists and is readable
-		absPath, err := filepath.Abs(source)
+		// Resolve through the chain
+		resolved, err := chain.Resolve(ctx, input)
 		if err != nil {
-			return fmt.Sprintf("❌ Invalid path: %s", source)
-		}
-		info, err := os.Stat(absPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Sprintf("❌ File not found: %s", source)
-			}
-			return fmt.Sprintf("❌ Cannot access file: %s (%v)", source, err)
-		}
-		if info.IsDir() {
-			return fmt.Sprintf("❌ %s is a directory. Use it without trailing slash or specify files.", source)
+			return fmt.Sprintf("❌ %v", err)
 		}
 
 		track := &audio.Track{
-			Title:       filepath.Base(source),
-			Source:      absPath,
-			SourceType:  audio.SourceLocal,
+			Title:       resolved.Title,
+			Source:      resolved.URL,
+			SourceType:  resolved.Type,
 			RequestedBy: user.Name,
 		}
 		qm.Enqueue(track)
-		return fmt.Sprintf("▶ Playing: %s", track.Title)
+		return fmt.Sprintf("▶ Playing: %s", resolved.Title)
 	})
 
 	// !stop
@@ -208,53 +196,23 @@ func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manag
 	})
 }
 
-// isURL returns true if the source looks like a URL (http/https). This check
-// runs before local file checks so paths like "http://..." are not treated
-// as nonexistent local files.
-func isURL(source string) bool {
-	return strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://")
-}
-
-// handleDirectory scans a directory for audio files and enqueues them.
-func handleDirectory(user *gumble.User, dirPath string, qm *queue.Manager, cfg *config.Config) string {
-	// Known audio extensions
-	audioExts := map[string]bool{
-		".mp3": true, ".wav": true, ".flac": true, ".ogg": true,
-		".m4a": true, ".wma": true, ".aac": true, ".opus": true,
+// handleDirResolve resolves a directory through the LocalResolver and enqueues all files.
+func handleDirResolve(ctx context.Context, user *gumble.User, dirPath string, chain *source.Chain, qm *queue.Manager) string {
+	localRes := &source.LocalResolver{}
+	sources, err := localRes.ResolveDir(ctx, dirPath)
+	if err != nil {
+		return fmt.Sprintf("❌ %v", err)
 	}
 
-	var files []string
-	filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		if audioExts[ext] {
-			files = append(files, path)
-		}
-		return nil
-	})
-
-	if len(files) == 0 {
-		return "No audio files found in directory"
-	}
-
-	// Sort for consistent ordering
-	sort.Strings(files)
-
-	// Enqueue all files
-	for _, f := range files {
+	for _, src := range sources {
 		track := &audio.Track{
-			Title:       filepath.Base(f),
-			Source:      f,
-			SourceType:  audio.SourceLocal,
+			Title:       src.Title,
+			Source:      src.URL,
+			SourceType:  src.Type,
 			RequestedBy: user.Name,
 		}
 		qm.Enqueue(track)
 	}
 
-	return fmt.Sprintf("📁 Enqueued %d files from %s", len(files), filepath.Base(dirPath))
+	return fmt.Sprintf("📁 Enqueued %d files", len(sources))
 }
