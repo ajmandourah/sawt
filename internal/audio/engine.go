@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,8 +54,9 @@ type Engine struct {
 	sink Sink
 
 	// FFmpeg process
-	cmd    *exec.Cmd
-	stdout io.ReadCloser
+	cmd      *exec.Cmd
+	ytDlpCmd *exec.Cmd // yt-dlp process (when using ytdlp pipe source)
+	stdout   io.ReadCloser
 
 	// Control
 	stopCh chan struct{} // closed to signal stop
@@ -79,6 +81,8 @@ func New(sink Sink) *Engine {
 }
 
 // Start spawns FFmpeg for the given source and begins streaming audio.
+// If source is prefixed with "ytdlp:", yt-dlp pipes audio directly to FFmpeg
+// (avoids 403 errors from DASH URLs that require specific headers).
 // It returns immediately; playback runs in the background.
 // Call Stop() to terminate playback.
 func (e *Engine) Start(source string) error {
@@ -91,28 +95,63 @@ func (e *Engine) Start(source string) error {
 	e.doneCh = make(chan struct{})
 	e.mu.Unlock()
 
-	// Build FFmpeg command
-	args := []string{
-		"-i", source,
-		"-f", "s16le",
-		"-acodec", "pcm_s16le",
-		"-ar", fmt.Sprintf("%d", SampleRate),
-		"-ac", fmt.Sprintf("%d", Channels),
-		"-loglevel", "error",
-		"-y", // overwrite output
-		"-",  // write to stdout
+	// Clear any startup error from a previous track.
+	e.startupErrMu.Lock()
+	e.startupErr = ""
+	e.startupErrMu.Unlock()
+
+	var cmd *exec.Cmd
+	var ytDlpCmd *exec.Cmd
+	var stdout io.ReadCloser
+	var err error
+
+	if strings.HasPrefix(source, "ytdlp:") {
+		// yt-dlp pipe: yt-dlp extracts audio → pipes to FFmpeg stdin
+		// This avoids 403 errors from DASH URLs that require specific headers.
+		ytURL := strings.TrimPrefix(source, "ytdlp:")
+		ytDlpCmd = exec.Command("yt-dlp", "-x", "--audio-format", "best",
+			"--no-playlist", "--restrict-filenames", "-o", "-", ytURL)
+		stdout, err = ytDlpCmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("yt-dlp stdout pipe: %w", err)
+		}
+
+		// FFmpeg reads from stdin (the yt-dlp pipe)
+		cmd = exec.Command("ffmpeg", "-i", "-",
+			"-f", "s16le", "-acodec", "pcm_s16le",
+			"-ar", fmt.Sprintf("%d", SampleRate),
+			"-ac", fmt.Sprintf("%d", Channels),
+			"-loglevel", "error", "-y", "-")
+		cmd.Stdin = stdout
+	} else {
+		// Standard: FFmpeg reads from file or URL directly.
+		args := []string{
+			"-i", source,
+			"-f", "s16le",
+			"-acodec", "pcm_s16le",
+			"-ar", fmt.Sprintf("%d", SampleRate),
+			"-ac", fmt.Sprintf("%d", Channels),
+			"-loglevel", "error",
+			"-y",
+			"-",
+		}
+		cmd = exec.Command("ffmpeg", args...)
+		stdout, err = cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("ffmpeg stdout pipe: %w", err)
+		}
 	}
 
-	cmd := exec.Command("ffmpeg", args...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("ffmpeg stdout pipe: %w", err)
-	}
-
-	// Capture stderr for error reporting
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
 
+	// Start yt-dlp first (if applicable), then FFmpeg.
+	if ytDlpCmd != nil {
+		if err := ytDlpCmd.Start(); err != nil {
+			stdout.Close()
+			return fmt.Errorf("start yt-dlp: %w", err)
+		}
+	}
 	if err := cmd.Start(); err != nil {
 		stdout.Close()
 		return fmt.Errorf("start ffmpeg: %w", err)
@@ -120,6 +159,7 @@ func (e *Engine) Start(source string) error {
 
 	e.mu.Lock()
 	e.cmd = cmd
+	e.ytDlpCmd = ytDlpCmd
 	e.stdout = stdout
 	e.mu.Unlock()
 
@@ -277,13 +317,22 @@ func bytesToInt16(b []byte) []int16 {
 	return samples
 }
 
-// cleanup stops the FFmpeg process and closes resources.
+// cleanup stops the FFmpeg and yt-dlp processes and closes resources.
 func (e *Engine) cleanup(reader io.ReadCloser) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	// Close audio channel to flush final frame
 	e.sink.CloseAudio()
+
+	// Kill yt-dlp first (its output feeds FFmpeg).
+	if e.ytDlpCmd != nil && e.ytDlpCmd.Process != nil {
+		if err := e.ytDlpCmd.Process.Kill(); err != nil {
+			log.Printf("Kill yt-dlp: %v", err)
+		}
+		e.ytDlpCmd.Wait()
+		e.ytDlpCmd = nil
+	}
 
 	if e.cmd != nil {
 		if err := e.cmd.Process.Kill(); err != nil {

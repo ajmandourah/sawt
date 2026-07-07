@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ladis/sawt/internal/audio"
+	"github.com/ladis/sawt/internal/source"
 )
 
 // State represents the current playback state.
@@ -199,8 +200,14 @@ func (m *Manager) startNext() {
 	m.curr = m.items[0]
 	m.items = m.items[1:]
 
+	// Prefix yt-dlp sources so the engine pipes yt-dlp → FFmpeg.
+	playSource := m.curr.Source
+	if m.curr.SourceType == source.SourceYtDlp {
+		playSource = "ytdlp:" + m.curr.Source
+	}
+
 	// Start playing
-	if err := m.engine.Start(m.curr.Source); err != nil {
+	if err := m.engine.Start(playSource); err != nil {
 		log.Printf("Failed to start track %q: %v", m.curr.Title, err)
 		m.curr = nil
 		m.startNext() // try next
