@@ -43,8 +43,8 @@ const (
 
 // Sink abstracts the audio output destination (Mumble client).
 type Sink interface {
-	OpenAudio()                // open audio channel before playback
-	CloseAudio()               // close audio channel after playback
+	OpenAudio()                           // open audio channel before playback
+	CloseAudio()                          // close audio channel after playback
 	SendOpus(data []byte, seq int64) bool // send pre-encoded Opus packet; returns true if accepted
 }
 
@@ -171,6 +171,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		log.Printf("Opus encoder creation failed: %v", err)
 		return
 	}
+	encoder.SetBitrate(gopus.BitrateMaximum)
 
 	br := bufio.NewReaderSize(reader, BufioSize)
 	pcmBuf := make([]byte, BytesPerFrame)
@@ -204,8 +205,8 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 			// Convert PCM bytes to int16 for Opus encoder
 			samples := bytesToInt16(pcmBuf)
 
-			// Encode PCM to Opus
-			opusData, err := encoder.Encode(samples, SamplesPerFrame, 0)
+			// Encode PCM to Opus (maxDataBytes=4096 is safe upper bound for 20ms frame)
+			opusData, err := encoder.Encode(samples, SamplesPerFrame, 4096)
 			if err != nil || len(opusData) == 0 {
 				continue
 			}
