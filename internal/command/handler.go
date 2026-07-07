@@ -3,6 +3,7 @@ package command
 
 import (
 	"log"
+	"regexp"
 	"strings"
 
 	"layeh.com/gumble/gumble"
@@ -56,6 +57,10 @@ func (d *Dispatcher) Parse(message string) *Action {
 		args = strings.TrimSpace(parts[1])
 	}
 
+	// Mumble auto-links URLs with <a href="...">...</a> tags.
+	// Strip all HTML so resolvers get clean input.
+	args = stripHTML(args)
+
 	return &Action{
 		Command: cmd,
 		Args:    args,
@@ -70,6 +75,14 @@ func (d *Dispatcher) Dispatch(source *gumble.User, action *Action) string {
 	}
 	log.Printf("Command %q from %s: %s", action.Command, source.Name, action.Args)
 	return h(source, action)
+}
+
+// stripHTML removes all HTML tags from a string.
+// Mumble auto-wraps URLs in <a href="...">...</a> tags.
+var htmlTagRe = regexp.MustCompile(`<[^>]+>`)
+
+func stripHTML(s string) string {
+	return htmlTagRe.ReplaceAllString(s, "")
 }
 
 // ListCommands returns all registered command names.
