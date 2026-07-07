@@ -35,16 +35,23 @@ func (r *YtDlpResolver) Resolve(ctx context.Context, input string) (*ResolvedSou
 		return nil, fmt.Errorf("yt-dlp is not installed or not in PATH")
 	}
 
-	// yt-dlp -g --no-playlist <url> → outputs direct media URL(s)
-	// -g : output URL only
-	// --no-playlist : don't resolve entire playlists
-	// --dump-json is NOT used; we just want the URL.
-	args := []string{"-g", "--no-playlist", "--restrict-filenames", input}
+	// Get the title first (fast, no download).
+	title := input
+	titleCmd := exec.CommandContext(ctx, r.binary, "--print", "title", "--no-playlist", "--restrict-filenames", input)
+	if titleOut, err := titleCmd.Output(); err == nil {
+		if t := strings.TrimSpace(string(titleOut)); t != "" {
+			title = t
+		}
+	}
+
+	// yt-dlp -g to get direct URL, preferring audio-only formats.
+	// -f ba: best audio-only format (m4a, webm, etc.)
+	// This avoids DASH video URLs that FFmpeg can't decode to audio.
+	args := []string{"-g", "--no-playlist", "--restrict-filenames", "-f", "ba", input}
 
 	cmd := exec.CommandContext(ctx, r.binary, args...)
 	out, err := cmd.Output()
 	if err != nil {
-		// Check if it's a "not a playlist" or "unsupported" error.
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "NotFound") || strings.Contains(errMsg, "executable file not found") {
 			return nil, fmt.Errorf("yt-dlp is not installed")
@@ -57,17 +64,7 @@ func (r *YtDlpResolver) Resolve(ctx context.Context, input string) (*ResolvedSou
 		return nil, fmt.Errorf("yt-dlp returned no URL for %s", input)
 	}
 
-	// Use the first (best quality) URL.
 	directURL := strings.TrimSpace(urls[0])
-
-	// Try to extract a title via yt-dlp --print title.
-	title := directURL
-	titleCmd := exec.CommandContext(ctx, r.binary, "--print", "title", "--no-playlist", input)
-	if titleOut, err := titleCmd.Output(); err == nil {
-		if t := strings.TrimSpace(string(titleOut)); t != "" {
-			title = t
-		}
-	}
 
 	return &ResolvedSource{
 		URL:   directURL,

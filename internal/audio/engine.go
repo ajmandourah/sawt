@@ -3,6 +3,7 @@
 package audio
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -130,6 +131,8 @@ func (e *Engine) Start(source string) error {
 }
 
 // runLoop reads PCM frames from FFmpeg and sends them to Mumble.
+// Uses a single goroutine with a ticker — reads exactly one 20ms frame per tick.
+// This eliminates the busy-poll reader goroutine that caused stuttering.
 func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer func() {
 		e.cleanup(reader)
@@ -137,15 +140,12 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	}()
 
 	// Check for FFmpeg startup errors (file not found, unsupported format, etc.)
-	// Give FFmpeg a moment to fail fast, then check stderr
 	go func() {
 		time.Sleep(2 * time.Second)
 		e.startupErrMu.Lock()
 		errStr := stderrBuf.String()
 		e.startupErrMu.Unlock()
 		if errStr != "" {
-			// Only treat as startup error if FFmpeg exited quickly
-			// (before we had a chance to send audio)
 			e.mu.Lock()
 			cmd := e.cmd
 			e.mu.Unlock()
@@ -163,90 +163,33 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		}
 	}()
 
+	br := bufio.NewReaderSize(reader, BufioSize)
+	frameBuf := make([]byte, BytesPerFrame)
 	ticker := time.NewTicker(FrameDuration)
 	defer ticker.Stop()
 
-	// Channel for passing frames from reader to sender
-	pcmCh := make(chan []int16, FrameChannelBuffer)
-
-	// Reader goroutine: read raw bytes, convert to int16, push to channel
-	readerDone := make(chan struct{})
-	go func() {
-		defer close(pcmCh)
-		defer close(readerDone)
-
-		buf := make([]byte, BufioSize)
-		offset := 0
-
-		for {
-			select {
-			case <-e.stopCh:
-				return
-			default:
-			}
-
-			n, err := reader.Read(buf[offset:])
-			offset += n
-
-			// Extract complete frames from buffer
-			for offset >= BytesPerFrame {
-				select {
-				case <-e.stopCh:
-					return
-				default:
-				}
-
-				// Convert s16le bytes to []int16
-				samples := bytesToInt16(buf[:BytesPerFrame])
-
-				select {
-				case pcmCh <- samples:
-				case <-e.stopCh:
-					return
-				}
-
-				// Shift remaining bytes to front of buffer
-				remaining := offset - BytesPerFrame
-				if remaining > 0 {
-					copy(buf, buf[BytesPerFrame:offset])
-				}
-				offset = remaining
-			}
-
-			if err != nil {
-				if err != io.EOF {
-					log.Printf("FFmpeg read error: %v", err)
-				}
-				return
-			}
-		}
-	}()
-
-	// Playback loop: tick at 20ms, send frames
 	frameCount := 0
 	for {
 		select {
 		case <-e.stopCh:
-			// Drain reader goroutine
-			<-readerDone
 			log.Printf("Playback stopped after %d frames", frameCount)
 			return
 		case <-ticker.C:
-			select {
-			case pcm, ok := <-pcmCh:
-				if !ok {
-					// Reader finished (track ended naturally)
+			// Read exactly one frame. Blocks until data is available.
+			_, err := io.ReadFull(br, frameBuf)
+			if err != nil {
+				if err == io.EOF || err == io.ErrUnexpectedEOF {
 					log.Printf("Audio stream ended after %d frames", frameCount)
-					<-readerDone
 					e.waitFFmpeg()
 					return
 				}
-				e.sink.SendAudio(pcm)
-				frameCount++
-			default:
-				// No frame available, send silence
-				e.sink.SendAudio(e.silence[:])
+				log.Printf("FFmpeg read error: %v", err)
+				return
 			}
+
+			samples := bytesToInt16(frameBuf)
+			e.sink.SendAudio(samples)
+			frameCount++
 		}
 	}
 }

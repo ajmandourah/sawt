@@ -212,19 +212,25 @@ func (m *Manager) startNext() {
 	m.emitTrackChange()
 
 	// When track finishes, start next
+	currentTrack := m.curr // capture before goroutine runs
 	go func() {
 		<-m.engine.Done()
 
 		// Check for FFmpeg startup errors (unsupported format, corrupted file, etc.)
 		startupErr := m.engine.GetStartupError()
 		if startupErr != "" {
-			log.Printf("Track %q failed: %s", m.curr.Title, startupErr)
+			log.Printf("Track %q failed: %s", currentTrack.Title, startupErr)
 		}
 
 		m.mu.Lock()
 		defer m.mu.Unlock()
 
-		log.Printf("Track finished: %s", m.curr.Title)
+		// Don't proceed if the queue was stopped/cleared while this track was playing.
+		if m.state == StateIdle {
+			return
+		}
+
+		log.Printf("Track finished: %s", currentTrack.Title)
 		m.stopCurrent()
 		m.startNext()
 	}()
