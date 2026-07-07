@@ -267,23 +267,24 @@ func (c *Client) CloseAudio() {
 	}
 }
 
-// SendAudio sends PCM audio samples to the Mumble server.
-// The gumble library handles Opus encoding internally.
-// OpenAudio() must be called first.
-func (c *Client) SendAudio(samples []int16) {
+// SendOpus sends a pre-encoded Opus packet directly to the Mumble server.
+// Bypasses gumble's unbuffered AudioOutgoing channel to avoid frame drops.
+// format=4 (Opus), target=0 (talk to everyone)
+func (c *Client) SendOpus(data []byte, seq int64) bool {
 	c.mu.Lock()
-	ch := c.audioCh
+	conn := c.client.Conn
 	c.mu.Unlock()
 
-	if ch == nil {
-		log.Printf("SendAudio: audioCh is nil!")
-		return
+	if conn == nil {
+		return false
 	}
-	select {
-	case ch <- samples:
-	default:
-		log.Printf("SendAudio: channel full, dropping frame")
+	// WriteAudio: format=4 (Opus), target=0, sequence, final=false, data, no spatial audio
+	err := conn.WriteAudio(4, 0, seq, false, data, nil, nil, nil)
+	if err != nil {
+		log.Printf("SendOpus: write error: %v", err)
+		return false
 	}
+	return true
 }
 
 // Stop gracefully shuts down the client.

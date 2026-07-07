@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/ladis/sawt/internal/source"
+	"layeh.com/gopus"
+	"layeh.com/gumble/gumble"
 )
 
 const (
@@ -41,9 +43,9 @@ const (
 
 // Sink abstracts the audio output destination (Mumble client).
 type Sink interface {
-	OpenAudio()  // open audio channel before playback
-	CloseAudio() // close audio channel after playback
-	SendAudio(samples []int16)
+	OpenAudio()                // open audio channel before playback
+	CloseAudio()               // close audio channel after playback
+	SendOpus(data []byte, seq int64) bool // send pre-encoded Opus packet; returns true if accepted
 }
 
 // Engine manages a single FFmpeg playback session.
@@ -130,9 +132,9 @@ func (e *Engine) Start(source string) error {
 	return nil
 }
 
-// runLoop reads PCM frames from FFmpeg and sends them to Mumble.
-// Uses a single goroutine with a ticker — reads exactly one 20ms frame per tick.
-// This eliminates the busy-poll reader goroutine that caused stuttering.
+// runLoop reads PCM frames from FFmpeg, encodes to Opus, and sends to Mumble.
+// Encodes Opus ourselves to bypass gumble's unbuffered AudioOutgoing channel
+// which caused frame drops and stuttering on network streams.
 func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer func() {
 		e.cleanup(reader)
@@ -163,20 +165,32 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		}
 	}()
 
+	// Create our own Opus encoder (mono, 48kHz)
+	encoder, err := gopus.NewEncoder(gumble.AudioSampleRate, gumble.AudioChannels, gopus.Voip)
+	if err != nil {
+		log.Printf("Opus encoder creation failed: %v", err)
+		return
+	}
+
 	br := bufio.NewReaderSize(reader, BufioSize)
-	frameBuf := make([]byte, BytesPerFrame)
+	pcmBuf := make([]byte, BytesPerFrame)
 	ticker := time.NewTicker(FrameDuration)
 	defer ticker.Stop()
 
 	frameCount := 0
+	dropped := 0
+	seq := int64(0)
 	for {
 		select {
 		case <-e.stopCh:
-			log.Printf("Playback stopped after %d frames", frameCount)
+			if dropped > 0 {
+				log.Printf("Playback stopped after %d frames (%d dropped)", frameCount, dropped)
+			} else {
+				log.Printf("Playback stopped after %d frames", frameCount)
+			}
 			return
 		case <-ticker.C:
-			// Read exactly one frame. Blocks until data is available.
-			_, err := io.ReadFull(br, frameBuf)
+			_, err := io.ReadFull(br, pcmBuf)
 			if err != nil {
 				if err == io.EOF || err == io.ErrUnexpectedEOF {
 					log.Printf("Audio stream ended after %d frames", frameCount)
@@ -187,8 +201,20 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 				return
 			}
 
-			samples := bytesToInt16(frameBuf)
-			e.sink.SendAudio(samples)
+			// Convert PCM bytes to int16 for Opus encoder
+			samples := bytesToInt16(pcmBuf)
+
+			// Encode PCM to Opus
+			opusData, err := encoder.Encode(samples, SamplesPerFrame, 0)
+			if err != nil || len(opusData) == 0 {
+				continue
+			}
+
+			if !e.sink.SendOpus(opusData, seq) {
+				dropped++
+				continue
+			}
+			seq++
 			frameCount++
 		}
 	}
