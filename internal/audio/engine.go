@@ -110,11 +110,16 @@ func (e *Engine) Start(source string) error {
 		// This avoids 403 errors from DASH URLs that require specific headers.
 		ytURL := strings.TrimPrefix(source, "ytdlp:")
 		ytDlpCmd = exec.Command("yt-dlp", "-x", "--audio-format", "best",
-			"--no-playlist", "--restrict-filenames", "-o", "-", ytURL)
+			"--no-playlist", "--restrict-filenames",
+			"--no-progress", "--no-warnings", "-q",
+			"-o", "-", ytURL)
 		stdout, err = ytDlpCmd.StdoutPipe()
 		if err != nil {
 			return fmt.Errorf("yt-dlp stdout pipe: %w", err)
 		}
+		// Capture yt-dlp stderr separately so it doesn't corrupt the pipe.
+		var ytDlpStderr bytes.Buffer
+		ytDlpCmd.Stderr = &ytDlpStderr
 
 		// FFmpeg reads from stdin (the yt-dlp pipe)
 		cmd = exec.Command("ffmpeg", "-i", "-",
