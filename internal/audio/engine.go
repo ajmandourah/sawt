@@ -133,8 +133,9 @@ func (e *Engine) Start(source string) error {
 }
 
 // runLoop reads PCM frames from FFmpeg, encodes to Opus, and sends to Mumble.
-// Encodes Opus ourselves to bypass gumble's unbuffered AudioOutgoing channel
-// which caused frame drops and stuttering on network streams.
+// Uses a reader goroutine with a large buffer channel so network latency
+// never blocks the send loop. When the channel is empty, the last good frame
+// is repeated to avoid audible gaps.
 func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer func() {
 		e.cleanup(reader)
@@ -173,14 +174,46 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	}
 	encoder.SetBitrate(gopus.BitrateMaximum)
 
-	br := bufio.NewReaderSize(reader, BufioSize)
-	pcmBuf := make([]byte, BytesPerFrame)
+	// Buffered channel absorbs bursty FFmpeg output.
+	// 200 frames = ~4 seconds of headroom for network streams.
+	frameCh := make(chan []int16, 200)
+
+	// Reader goroutine: read PCM from FFmpeg, convert to int16, push to channel.
+	readerDone := make(chan struct{})
+	go func() {
+		defer close(frameCh)
+		defer close(readerDone)
+
+		br := bufio.NewReaderSize(reader, BufioSize)
+		pcmBuf := make([]byte, BytesPerFrame)
+
+		for {
+			_, err := io.ReadFull(br, pcmBuf)
+			if err != nil {
+				return // EOF or error — channel close will signal sender
+			}
+
+			samples := bytesToInt16(pcmBuf)
+			select {
+			case frameCh <- samples:
+			case <-e.stopCh:
+				return
+			default:
+				// Channel full — drop to avoid blocking the reader.
+				// The sender will repeat the last good frame.
+			}
+		}
+	}()
+
 	ticker := time.NewTicker(FrameDuration)
 	defer ticker.Stop()
 
+	var lastOpus []byte // cache last good Opus frame to repeat on gap
 	frameCount := 0
 	dropped := 0
 	seq := int64(0)
+	finished := false
+
 	for {
 		select {
 		case <-e.stopCh:
@@ -190,26 +223,23 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 				log.Printf("Playback stopped after %d frames", frameCount)
 			}
 			return
-		case <-ticker.C:
-			_, err := io.ReadFull(br, pcmBuf)
-			if err != nil {
-				if err == io.EOF || err == io.ErrUnexpectedEOF {
-					log.Printf("Audio stream ended after %d frames", frameCount)
-					e.waitFFmpeg()
-					return
-				}
-				log.Printf("FFmpeg read error: %v", err)
-				return
-			}
 
-			// Convert PCM bytes to int16 for Opus encoder
-			samples := bytesToInt16(pcmBuf)
+		case <-readerDone:
+			// Reader finished — mark done. Next tick will exit.
+			finished = true
 
-			// Encode PCM to Opus (maxDataBytes=4096 is safe upper bound for 20ms frame)
-			opusData, err := encoder.Encode(samples, SamplesPerFrame, 4096)
-			if err != nil || len(opusData) == 0 {
+		case samples, ok := <-frameCh:
+			if !ok {
+				// Channel closed (reader finished)
+				finished = true
 				continue
 			}
+			// Got a fresh frame — encode and send
+			opusData, encErr := encoder.Encode(samples, SamplesPerFrame, 4096)
+			if encErr != nil || len(opusData) == 0 {
+				continue
+			}
+			lastOpus = opusData
 
 			if !e.sink.SendOpus(opusData, seq) {
 				dropped++
@@ -217,6 +247,22 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 			}
 			seq++
 			frameCount++
+
+		case <-ticker.C:
+			if finished {
+				log.Printf("Audio stream ended after %d frames", frameCount)
+				e.waitFFmpeg()
+				return
+			}
+			// No fresh frame available — repeat last good frame to avoid gap.
+			if len(lastOpus) > 0 {
+				if !e.sink.SendOpus(lastOpus, seq) {
+					dropped++
+					continue
+				}
+				seq++
+				frameCount++
+			}
 		}
 	}
 }
