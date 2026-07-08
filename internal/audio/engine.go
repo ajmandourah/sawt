@@ -112,6 +112,7 @@ func (e *Engine) Start(source string) error {
 		ytDlpCmd = exec.Command("yt-dlp", "-x", "--audio-format", "best",
 			"--no-playlist", "--restrict-filenames",
 			"--no-progress", "--no-warnings", "-q",
+			"--extractor-args", "youtube:player_client=android",
 			"-o", "-", ytURL)
 		stdout, err = ytDlpCmd.StdoutPipe()
 		if err != nil {
