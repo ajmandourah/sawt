@@ -29,6 +29,9 @@ type Config struct {
 
 	// yt-dlp
 	YtDlpPath string // path to yt-dlp binary (default: "yt-dlp")
+
+	// Audio
+	Stereo bool // enable stereo audio (requires Mumble 1.4.0+)
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -40,6 +43,7 @@ func DefaultConfig() *Config {
 		Prefix:    "!",
 		YtDlpPath: "yt-dlp",
 		MusicDir:  "./music",
+		Stereo:    false,
 	}
 }
 
@@ -58,6 +62,7 @@ func Load() (*Config, error) {
 	flagMusic := flag.String("music-dir", cfg.MusicDir, "Directory with local music files")
 	flagPrefix := flag.String("prefix", cfg.Prefix, "Command prefix character")
 	flagYtDlp := flag.String("ytdlp", cfg.YtDlpPath, "Path to yt-dlp binary")
+	flagStereo := flag.Bool("stereo", cfg.Stereo, "Enable stereo audio")
 	flagConfig := flag.String("config", "", "Path to YAML config file")
 	flag.Parse()
 
@@ -82,6 +87,7 @@ func Load() (*Config, error) {
 	cfg.MusicDir = *flagMusic
 	cfg.Prefix = *flagPrefix
 	cfg.YtDlpPath = *flagYtDlp
+	cfg.Stereo = *flagStereo
 
 	// Validate
 	if err := cfg.validate(); err != nil {
@@ -128,6 +134,8 @@ func loadYAML(cfg *Config, path string) error {
 			cfg.Prefix = v
 		case "ytdlp":
 			cfg.YtDlpPath = v
+		case "stereo":
+			cfg.Stereo = v == "true"
 		}
 	}
 

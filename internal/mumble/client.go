@@ -12,6 +12,7 @@ import (
 
 	"layeh.com/gumble/gumble"
 	"layeh.com/gumble/gumbleutil"
+	"layeh.com/gopus"
 	_ "layeh.com/gumble/opus" // register Opus codec
 
 	"github.com/ladis/sawt/internal/config"
@@ -31,6 +32,21 @@ type Client struct {
 
 	// Audio output channel (one per playback session)
 	audioCh chan<- gumble.AudioBuffer
+}
+
+// StereoEncoder wraps gopus with 2-channel support for stereo audio.
+type StereoEncoder struct {
+	enc *gopus.Encoder
+}
+
+func (e *StereoEncoder) ID() int { return 4 }
+
+func (e *StereoEncoder) Encode(pcm []int16, frameSize, maxDataBytes int) ([]byte, error) {
+	return e.enc.Encode(pcm, frameSize, maxDataBytes)
+}
+
+func (e *StereoEncoder) Reset() {
+	e.enc.ResetState()
 }
 
 // New creates a new Mumble client and connects to the server.
@@ -104,6 +120,19 @@ func (c *Client) connect() error {
 	client, err := gumble.DialWithDialer(new(net.Dialer), c.cfg.Server, gConfig, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("gumble dial: %w", err)
+	}
+
+	// Override audio encoder for stereo support
+	if c.cfg.Stereo {
+		stereoEnc := &StereoEncoder{
+			enc: func() *gopus.Encoder {
+				e, _ := gopus.NewEncoder(gumble.AudioSampleRate, 2, gopus.Voip)
+				e.SetBitrate(gopus.BitrateMaximum)
+				return e
+			}(),
+		}
+		client.AudioEncoder = stereoEnc
+		log.Printf("Using stereo Opus encoder (2 channels)")
 	}
 
 	c.client = client

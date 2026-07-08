@@ -18,20 +18,9 @@ import (
 )
 
 const (
-	// Audio format constants for Mumble compatibility.
-	// Mumble uses mono audio (1 channel) per the gumble library.
 	SampleRate    = 48000
-	Channels      = 1
-	BitsPerSample = 16
 	FrameDuration = 20 * time.Millisecond
-
-	// BytesPerFrame = SampleRate × Channels × (BitsPerSample/8) × FrameDuration
-	// = 48000 × 1 × 2 × 0.020 = 1920
-	BytesPerFrame = 1920
-
-	// SamplesPerFrame = BytesPerFrame / 2 (each int16 is 2 bytes)
-	// = 1920 / 2 = 960 samples per frame
-	SamplesPerFrame = 960
+	BitsPerSample = 16
 
 	// BufioSize is the internal buffer size for reading FFmpeg stdout.
 	BufioSize = 32 * 1024
@@ -42,9 +31,9 @@ const (
 
 // Sink abstracts the audio output destination (Mumble client).
 type Sink interface {
-	OpenAudio()                       // open audio channel before playback
-	CloseAudio()                      // close audio channel after playback
-	SendAudio(samples []int16) bool   // send one PCM frame; returns true if accepted
+	OpenAudio()                     // open audio channel before playback
+	CloseAudio()                    // close audio channel after playback
+	SendAudio(samples []int16) bool // send one PCM frame; returns true if accepted
 }
 
 // Engine manages a single FFmpeg playback session.
@@ -53,34 +42,52 @@ type Engine struct {
 
 	// FFmpeg process
 	cmd     *exec.Cmd
-	tmpFile string        // temp file path (yt-dlp downloaded audio)
+	tmpFile string
 	stdout  io.ReadCloser
 
 	// Control
-	stopCh chan struct{} // closed to signal stop
-	doneCh chan struct{} // closed when engine fully shut down
+	stopCh chan struct{}
+	doneCh chan struct{}
 	mu     sync.Mutex
 
-	// Startup error from FFmpeg stderr (set during first few seconds)
+	// Startup error from FFmpeg stderr
 	startupErrMu sync.Mutex
 	startupErr   string
 
-	// Silence buffer (pre-allocated int16 samples)
-	silence [SamplesPerFrame]int16
+	// Silence buffer
+	silence []int16
+
+	// Audio format (mono or stereo)
+	channels      int
+	bytesPerFrame int
+	samplesPerFrame int
 }
 
 // New creates a new Engine ready to play.
-func New(sink Sink) *Engine {
+func New(sink Sink, stereo bool) *Engine {
+	channels := 1
+	bytesPerFrame := 1920
+	samplesPerFrame := 960
+	if stereo {
+		channels = 2
+		bytesPerFrame = 3840
+		samplesPerFrame = 1920
+	}
+
+	silence := make([]int16, samplesPerFrame)
+
 	return &Engine{
-		sink:   sink,
-		stopCh: make(chan struct{}),
-		doneCh: make(chan struct{}),
+		sink:          sink,
+		stopCh:        make(chan struct{}),
+		doneCh:        make(chan struct{}),
+		channels:      channels,
+		bytesPerFrame: bytesPerFrame,
+		samplesPerFrame: samplesPerFrame,
+		silence:       silence,
 	}
 }
 
 // Start spawns FFmpeg for the given source and begins streaming audio.
-// It returns immediately; playback runs in the background.
-// Call Stop() to terminate playback.
 func (e *Engine) Start(source string) error {
 	e.mu.Lock()
 	if e.cmd != nil {
@@ -103,7 +110,6 @@ func (e *Engine) Start(source string) error {
 
 	if strings.HasPrefix(source, "ytdlp:") {
 		// yt-dlp downloads audio to a temp file, then FFmpeg reads it.
-		// -f "ba": best audio-only format (any container — works for YouTube + SoundCloud).
 		ytURL := strings.TrimPrefix(source, "ytdlp:")
 		tmpFile, err := os.CreateTemp("", "sawt-*.tmp")
 		if err != nil {
@@ -138,7 +144,7 @@ func (e *Engine) Start(source string) error {
 		cmd = exec.Command("ffmpeg", "-i", tmpPath,
 			"-f", "s16le", "-acodec", "pcm_s16le",
 			"-ar", fmt.Sprintf("%d", SampleRate),
-			"-ac", fmt.Sprintf("%d", Channels),
+			"-ac", fmt.Sprintf("%d", e.channels),
 			"-loglevel", "error", "-y", "-")
 		stdout, err = cmd.StdoutPipe()
 		if err != nil {
@@ -152,7 +158,7 @@ func (e *Engine) Start(source string) error {
 			"-f", "s16le",
 			"-acodec", "pcm_s16le",
 			"-ar", fmt.Sprintf("%d", SampleRate),
-			"-ac", fmt.Sprintf("%d", Channels),
+			"-ac", fmt.Sprintf("%d", e.channels),
 			"-loglevel", "error",
 			"-y",
 			"-",
@@ -195,7 +201,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		close(e.doneCh)
 	}()
 
-	// Check for FFmpeg startup errors (file not found, unsupported format, etc.)
+	// Check for FFmpeg startup errors
 	go func() {
 		time.Sleep(2 * time.Second)
 		e.startupErrMu.Lock()
@@ -245,7 +251,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 			offset += n
 
 			// Extract complete frames from buffer
-			for offset >= BytesPerFrame {
+			for offset >= e.bytesPerFrame {
 				select {
 				case <-e.stopCh:
 					return
@@ -253,7 +259,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 				}
 
 				// Convert s16le bytes to []int16
-				samples := bytesToInt16(buf[:BytesPerFrame])
+				samples := bytesToInt16(buf[:e.bytesPerFrame])
 
 				select {
 				case pcmCh <- samples:
@@ -262,9 +268,9 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 				}
 
 				// Shift remaining bytes to front of buffer
-				remaining := offset - BytesPerFrame
+				remaining := offset - e.bytesPerFrame
 				if remaining > 0 {
-					copy(buf, buf[BytesPerFrame:offset])
+					copy(buf, buf[e.bytesPerFrame:offset])
 				}
 				offset = remaining
 			}
@@ -355,7 +361,6 @@ func (e *Engine) waitFFmpeg() {
 }
 
 // Stop terminates playback immediately.
-// It blocks until the engine is fully shut down.
 func (e *Engine) Stop() {
 	e.mu.Lock()
 	if e.cmd == nil {
@@ -392,7 +397,7 @@ func (e *Engine) GetStartupError() string {
 // Track represents a playable audio source.
 type Track struct {
 	Title       string
-	Source      string     // resolved URL or file path
+	Source      string            // resolved URL or file path
 	SourceType  source.SourceType // how the source was obtained
-	RequestedBy string     // Mumble username who requested
+	RequestedBy string            // Mumble username who requested
 }
