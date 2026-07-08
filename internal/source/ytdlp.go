@@ -23,10 +23,22 @@ func NewYtDlpResolver(binary string) *YtDlpResolver {
 }
 
 func (r *YtDlpResolver) CanHandle(input string) bool {
-	// Fallback for any URL that other resolvers couldn't handle.
-	// We conservatively say yes to any URL — the actual resolve will fail
-	// if yt-dlp doesn't support the site.
-	return isURL(input)
+	if !isURL(input) {
+		return false
+	}
+	// Only claim known streaming sites; let DirectResolver handle raw URLs.
+	lower := strings.ToLower(input)
+	knownSites := []string{
+		"youtu", "soundcloud", "bandcamp", "spotify",
+		"vimeo", "dailymotion", "twitch", "facebook",
+		"instagram", "tiktok", "reddit", "9gag",
+	}
+	for _, site := range knownSites {
+		if strings.Contains(lower, site) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *YtDlpResolver) Resolve(ctx context.Context, input string) (*ResolvedSource, error) {
@@ -35,39 +47,22 @@ func (r *YtDlpResolver) Resolve(ctx context.Context, input string) (*ResolvedSou
 		return nil, fmt.Errorf("yt-dlp is not installed or not in PATH")
 	}
 
+	url := strings.TrimSpace(input)
+
 	// Get the title first (fast, no download).
-	title := input
-	titleCmd := exec.CommandContext(ctx, r.binary, "--print", "title", "--no-playlist", "--restrict-filenames", input)
+	title := url
+	titleCmd := exec.CommandContext(ctx, r.binary, "--print", "title", "--no-playlist", "--restrict-filenames", url)
 	if titleOut, err := titleCmd.Output(); err == nil {
 		if t := strings.TrimSpace(string(titleOut)); t != "" {
 			title = t
 		}
 	}
 
-	// yt-dlp -g to get direct URL, preferring audio-only formats.
-	// -f ba: best audio-only format (m4a, webm, etc.)
-	// This avoids DASH video URLs that FFmpeg can't decode to audio.
-	args := []string{"-g", "--no-playlist", "--restrict-filenames", "-f", "ba", input}
-
-	cmd := exec.CommandContext(ctx, r.binary, args...)
-	out, err := cmd.Output()
-	if err != nil {
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "NotFound") || strings.Contains(errMsg, "executable file not found") {
-			return nil, fmt.Errorf("yt-dlp is not installed")
-		}
-		return nil, fmt.Errorf("yt-dlp failed for %s: %v", input, errMsg)
-	}
-
-	urls := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(urls) == 0 || urls[0] == "" {
-		return nil, fmt.Errorf("yt-dlp returned no URL for %s", input)
-	}
-
-	directURL := strings.TrimSpace(urls[0])
-
+	// Return the ORIGINAL URL — the engine will pipe yt-dlp → FFmpeg.
+	// This lets yt-dlp handle the download with proper headers, avoiding
+	// 403 errors from DASH URLs and double-processing of resolved URLs.
 	return &ResolvedSource{
-		URL:   directURL,
+		URL:   url,
 		Title: title,
 		Type:  SourceYtDlp,
 	}, nil
