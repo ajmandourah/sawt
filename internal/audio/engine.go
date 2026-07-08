@@ -3,7 +3,6 @@
 package audio
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -37,15 +36,15 @@ const (
 	// BufioSize is the internal buffer size for reading FFmpeg stdout.
 	BufioSize = 32 * 1024
 
-	// FrameChannelBuffer provides ~80ms of decoupling between reader and encoder.
+	// FrameChannelBuffer provides ~80ms of decoupling between reader and sender.
 	FrameChannelBuffer = 4
 )
 
 // Sink abstracts the audio output destination (Mumble client).
 type Sink interface {
-	OpenAudio()                     // open audio channel before playback
-	CloseAudio()                    // close audio channel after playback
-	SendAudio(samples []int16) bool // send one PCM frame; returns true if accepted
+	OpenAudio()                       // open audio channel before playback
+	CloseAudio()                      // close audio channel after playback
+	SendAudio(samples []int16) bool   // send one PCM frame; returns true if accepted
 }
 
 // Engine manages a single FFmpeg playback session.
@@ -53,9 +52,9 @@ type Engine struct {
 	sink Sink
 
 	// FFmpeg process
-	cmd       *exec.Cmd
-	tmpFile   string        // temp file path (yt-dlp extracted audio)
-	stdout    io.ReadCloser
+	cmd     *exec.Cmd
+	tmpFile string        // temp file path (yt-dlp downloaded audio)
+	stdout  io.ReadCloser
 
 	// Control
 	stopCh chan struct{} // closed to signal stop
@@ -80,8 +79,6 @@ func New(sink Sink) *Engine {
 }
 
 // Start spawns FFmpeg for the given source and begins streaming audio.
-// If source is prefixed with "ytdlp:", yt-dlp pipes audio directly to FFmpeg
-// (avoids 403 errors from DASH URLs that require specific headers).
 // It returns immediately; playback runs in the background.
 // Call Stop() to terminate playback.
 func (e *Engine) Start(source string) error {
@@ -106,15 +103,15 @@ func (e *Engine) Start(source string) error {
 
 	if strings.HasPrefix(source, "ytdlp:") {
 		// yt-dlp downloads audio to a temp file, then FFmpeg reads it.
-		// -f "ba[ext=webm]": best audio WebM (Opus) — avoids -x postprocessing failures.
+		// -f "ba": best audio-only format (any container — works for YouTube + SoundCloud).
 		ytURL := strings.TrimPrefix(source, "ytdlp:")
-		tmpFile, err := os.CreateTemp("", "sawt-*.webm")
+		tmpFile, err := os.CreateTemp("", "sawt-*.tmp")
 		if err != nil {
 			return fmt.Errorf("create temp file: %w", err)
 		}
 		tmpPath = tmpFile.Name()
 
-		ytDlpCmd := exec.Command("yt-dlp", "-f", "ba[ext=webm]",
+		ytDlpCmd := exec.Command("yt-dlp", "-f", "ba",
 			"--no-playlist", "--restrict-filenames",
 			"--no-progress", "--no-warnings", "-q",
 			"-o", "-", ytURL)
@@ -122,12 +119,20 @@ func (e *Engine) Start(source string) error {
 		var ytDlpStderr bytes.Buffer
 		ytDlpCmd.Stderr = &ytDlpStderr
 
+		log.Printf("yt-dlp downloading: %s", ytURL)
 		if err := ytDlpCmd.Run(); err != nil {
 			tmpFile.Close()
 			os.Remove(tmpPath)
 			return fmt.Errorf("yt-dlp download: %w: %s", err, ytDlpStderr.String())
 		}
 		tmpFile.Close()
+
+		info, err := os.Stat(tmpPath)
+		if err != nil || info.Size() == 0 {
+			os.Remove(tmpPath)
+			return fmt.Errorf("yt-dlp produced empty file")
+		}
+		log.Printf("yt-dlp downloaded %d bytes", info.Size())
 
 		// FFmpeg reads the downloaded audio file
 		cmd = exec.Command("ffmpeg", "-i", tmpPath,
@@ -159,6 +164,7 @@ func (e *Engine) Start(source string) error {
 		}
 	}
 
+	// Capture stderr for error reporting
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
 
@@ -182,10 +188,7 @@ func (e *Engine) Start(source string) error {
 	return nil
 }
 
-// runLoop reads PCM frames from FFmpeg, encodes to Opus, and sends to Mumble.
-// Uses a reader goroutine with a large buffer channel so network latency
-// never blocks the send loop. When the channel is empty, the last good frame
-// is repeated to avoid audible gaps.
+// runLoop reads PCM frames from FFmpeg and sends them to Mumble.
 func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer func() {
 		e.cleanup(reader)
@@ -216,80 +219,89 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		}
 	}()
 
-	// Buffered channel absorbs bursty FFmpeg output.
-	// 200 frames = ~4 seconds of headroom for network streams.
-	frameCh := make(chan []int16, 200)
+	ticker := time.NewTicker(FrameDuration)
+	defer ticker.Stop()
 
-	// Reader goroutine: read PCM from FFmpeg, convert to int16, push to channel.
+	// Channel for passing frames from reader to sender
+	pcmCh := make(chan []int16, FrameChannelBuffer)
+
+	// Reader goroutine: read raw bytes, convert to int16, push to channel
 	readerDone := make(chan struct{})
 	go func() {
-		defer close(frameCh)
+		defer close(pcmCh)
 		defer close(readerDone)
 
-		br := bufio.NewReaderSize(reader, BufioSize)
-		pcmBuf := make([]byte, BytesPerFrame)
+		buf := make([]byte, BufioSize)
+		offset := 0
 
 		for {
-			_, err := io.ReadFull(br, pcmBuf)
-			if err != nil {
-				return // EOF or error — channel close will signal sender
-			}
-
-			samples := bytesToInt16(pcmBuf)
 			select {
-			case frameCh <- samples:
 			case <-e.stopCh:
 				return
 			default:
-				// Channel full — drop to avoid blocking the reader.
+			}
+
+			n, err := reader.Read(buf[offset:])
+			offset += n
+
+			// Extract complete frames from buffer
+			for offset >= BytesPerFrame {
+				select {
+				case <-e.stopCh:
+					return
+				default:
+				}
+
+				// Convert s16le bytes to []int16
+				samples := bytesToInt16(buf[:BytesPerFrame])
+
+				select {
+				case pcmCh <- samples:
+				case <-e.stopCh:
+					return
+				}
+
+				// Shift remaining bytes to front of buffer
+				remaining := offset - BytesPerFrame
+				if remaining > 0 {
+					copy(buf, buf[BytesPerFrame:offset])
+				}
+				offset = remaining
+			}
+
+			if err != nil {
+				if err != io.EOF {
+					log.Printf("FFmpeg read error: %v", err)
+				}
+				return
 			}
 		}
 	}()
 
-	ticker := time.NewTicker(FrameDuration)
-	defer ticker.Stop()
-
+	// Playback loop: tick at 20ms, send frames
 	frameCount := 0
-	dropped := 0
-	finished := false
-
 	for {
 		select {
 		case <-e.stopCh:
-			if dropped > 0 {
-				log.Printf("Playback stopped after %d frames (%d dropped)", frameCount, dropped)
-			} else {
-				log.Printf("Playback stopped after %d frames", frameCount)
-			}
+			<-readerDone
+			log.Printf("Playback stopped after %d frames", frameCount)
 			return
-
-		case <-readerDone:
-			finished = true
-
-		case samples, ok := <-frameCh:
-			if !ok {
-				finished = true
-				continue
-			}
-			// Send PCM frame via gumble's AudioOutgoing channel
-			if !e.sink.SendAudio(samples) {
-				dropped++
-				continue
-			}
-			frameCount++
-
 		case <-ticker.C:
-			if finished {
-				log.Printf("Audio stream ended after %d frames", frameCount)
-				e.waitFFmpeg()
-				return
+			select {
+			case pcm, ok := <-pcmCh:
+				if !ok {
+					// Reader finished (track ended naturally)
+					log.Printf("Audio stream ended after %d frames (%.1fs)", frameCount, float64(frameCount)*0.02)
+					<-readerDone
+					e.waitFFmpeg()
+					return
+				}
+				e.sink.SendAudio(pcm)
+				frameCount++
+			default:
+				// No frame available, send silence
+				e.sink.SendAudio(e.silence[:])
 			}
-			// No fresh frame — send silence to keep Mumble audio channel alive
-			if !e.sink.SendAudio(e.silence[:]) {
-				dropped++
-				continue
-			}
-			frameCount++
 		}
 	}
 }
@@ -304,7 +316,7 @@ func bytesToInt16(b []byte) []int16 {
 	return samples
 }
 
-// cleanup stops the FFmpeg and yt-dlp processes and closes resources.
+// cleanup stops the FFmpeg process and closes resources.
 func (e *Engine) cleanup(reader io.ReadCloser) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -312,7 +324,7 @@ func (e *Engine) cleanup(reader io.ReadCloser) {
 	// Close audio channel to flush final frame
 	e.sink.CloseAudio()
 
-	// Remove temp file (yt-dlp extracted audio).
+	// Remove temp file (yt-dlp downloaded audio)
 	if e.tmpFile != "" {
 		os.Remove(e.tmpFile)
 		e.tmpFile = ""
@@ -380,7 +392,7 @@ func (e *Engine) GetStartupError() string {
 // Track represents a playable audio source.
 type Track struct {
 	Title       string
-	Source      string            // resolved URL or file path
+	Source      string     // resolved URL or file path
 	SourceType  source.SourceType // how the source was obtained
-	RequestedBy string            // Mumble username who requested
+	RequestedBy string     // Mumble username who requested
 }
