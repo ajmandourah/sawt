@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"fmt"
+	"log"
 	"os/exec"
 	"strings"
 )
@@ -51,8 +52,13 @@ func (r *YtDlpResolver) Resolve(ctx context.Context, input string) (*ResolvedSou
 
 	// Get the title first (fast, no download).
 	title := url
-	titleCmd := exec.CommandContext(ctx, r.binary, "--print", "title", "--no-playlist", "--restrict-filenames", url)
-	if titleOut, err := titleCmd.Output(); err == nil {
+	titleCmd := exec.CommandContext(ctx, r.binary, "--print", "title",
+		"--no-playlist", "--restrict-filenames", "--no-warnings", url)
+	titleStderr := new(strings.Builder)
+	titleCmd.Stderr = titleStderr
+	if titleOut, err := titleCmd.Output(); err != nil {
+		log.Printf("yt-dlp title fetch failed for %s: %v (%s)", url, err, titleStderr.String())
+	} else {
 		if t := strings.TrimSpace(string(titleOut)); t != "" {
 			title = t
 		}

@@ -225,6 +225,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 
 	// Reader goroutine: read PCM from FFmpeg, convert to int16, push to channel.
 	readerDone := make(chan struct{})
+	readerFrames := 0
 	go func() {
 		defer close(frameCh)
 		defer close(readerDone)
@@ -235,9 +236,16 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		for {
 			_, err := io.ReadFull(br, pcmBuf)
 			if err != nil {
+				// Log FFmpeg stderr for diagnosis
+				stderrStr := stderrBuf.String()
+				if stderrStr != "" {
+					log.Printf("FFmpeg stderr (%d frames): %s", readerFrames, stderrStr)
+				}
+				log.Printf("Reader goroutine exiting after %d frames: %v", readerFrames, err)
 				return // EOF or error — channel close will signal sender
 			}
 
+			readerFrames++
 			samples := bytesToInt16(pcmBuf)
 			select {
 			case frameCh <- samples:

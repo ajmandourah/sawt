@@ -41,11 +41,12 @@ func (d *Dispatcher) Register(cmd string, h Handler) {
 // Parse checks if the message is a command and returns the parsed action.
 // Returns nil if the message is not a command.
 func (d *Dispatcher) Parse(message string) *Action {
-	if !strings.HasPrefix(message, d.prefix) {
+	msg := strings.TrimSpace(message)
+	if !strings.HasPrefix(msg, d.prefix) {
 		return nil
 	}
 
-	rest := strings.TrimSpace(message[len(d.prefix):])
+	rest := strings.TrimSpace(msg[len(d.prefix):])
 	if rest == "" {
 		return nil
 	}
