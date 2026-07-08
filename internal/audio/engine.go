@@ -71,7 +71,7 @@ func New(sink Sink, stereo bool) *Engine {
 	if stereo {
 		channels = 2
 		bytesPerFrame = 3840
-		samplesPerFrame = 1920
+		samplesPerFrame = 1920 // interleaved L/R
 	}
 
 	silence := make([]int16, samplesPerFrame)
