@@ -58,8 +58,8 @@ type Engine struct {
 	silence []int16
 
 	// Audio format (mono or stereo)
-	channels      int
-	bytesPerFrame int
+	channels        int
+	bytesPerFrame   int
 	samplesPerFrame int
 }
 
@@ -77,13 +77,13 @@ func New(sink Sink, stereo bool) *Engine {
 	silence := make([]int16, samplesPerFrame)
 
 	return &Engine{
-		sink:          sink,
-		stopCh:        make(chan struct{}),
-		doneCh:        make(chan struct{}),
-		channels:      channels,
-		bytesPerFrame: bytesPerFrame,
+		sink:            sink,
+		stopCh:          make(chan struct{}),
+		doneCh:          make(chan struct{}),
+		channels:        channels,
+		bytesPerFrame:   bytesPerFrame,
 		samplesPerFrame: samplesPerFrame,
-		silence:       silence,
+		silence:         silence,
 	}
 }
 

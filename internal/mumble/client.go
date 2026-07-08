@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"layeh.com/gopus"
 	"layeh.com/gumble/gumble"
 	"layeh.com/gumble/gumbleutil"
-	"layeh.com/gopus"
 	_ "layeh.com/gumble/opus" // register Opus codec
 
 	"github.com/ladis/sawt/internal/config"
