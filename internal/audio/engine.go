@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"github.com/ladis/sawt/internal/source"
-	"layeh.com/gopus"
-	"layeh.com/gumble/gumble"
 )
 
 const (
@@ -44,9 +42,9 @@ const (
 
 // Sink abstracts the audio output destination (Mumble client).
 type Sink interface {
-	OpenAudio()                           // open audio channel before playback
-	CloseAudio()                          // close audio channel after playback
-	SendOpus(data []byte, seq int64) bool // send pre-encoded Opus packet; returns true if accepted
+	OpenAudio()                       // open audio channel before playback
+	CloseAudio()                      // close audio channel after playback
+	SendAudio(samples []int16) bool   // send one PCM frame; returns true if accepted
 }
 
 // Engine manages a single FFmpeg playback session.
@@ -212,14 +210,6 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		}
 	}()
 
-	// Create our own Opus encoder (mono, 48kHz)
-	encoder, err := gopus.NewEncoder(gumble.AudioSampleRate, gumble.AudioChannels, gopus.Voip)
-	if err != nil {
-		log.Printf("Opus encoder creation failed: %v", err)
-		return
-	}
-	encoder.SetBitrate(gopus.BitrateMaximum)
-
 	// Buffered channel absorbs bursty FFmpeg output.
 	// 200 frames = ~4 seconds of headroom for network streams.
 	frameCh := make(chan []int16, 200)
@@ -246,7 +236,6 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 				return
 			default:
 				// Channel full — drop to avoid blocking the reader.
-				// The sender will repeat the last good frame.
 			}
 		}
 	}()
@@ -254,10 +243,8 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	ticker := time.NewTicker(FrameDuration)
 	defer ticker.Stop()
 
-	var lastOpus []byte // cache last good Opus frame to repeat on gap
 	frameCount := 0
 	dropped := 0
-	seq := int64(0)
 	finished := false
 
 	for {
@@ -271,27 +258,18 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 			return
 
 		case <-readerDone:
-			// Reader finished — mark done. Next tick will exit.
 			finished = true
 
 		case samples, ok := <-frameCh:
 			if !ok {
-				// Channel closed (reader finished)
 				finished = true
 				continue
 			}
-			// Got a fresh frame — encode and send
-			opusData, encErr := encoder.Encode(samples, SamplesPerFrame, 4096)
-			if encErr != nil || len(opusData) == 0 {
-				continue
-			}
-			lastOpus = opusData
-
-			if !e.sink.SendOpus(opusData, seq) {
+			// Send PCM frame via gumble's AudioOutgoing channel
+			if !e.sink.SendAudio(samples) {
 				dropped++
 				continue
 			}
-			seq++
 			frameCount++
 
 		case <-ticker.C:
@@ -300,15 +278,12 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 				e.waitFFmpeg()
 				return
 			}
-			// No fresh frame available — repeat last good frame to avoid gap.
-			if len(lastOpus) > 0 {
-				if !e.sink.SendOpus(lastOpus, seq) {
-					dropped++
-					continue
-				}
-				seq++
-				frameCount++
+			// No fresh frame — send silence to keep Mumble audio channel alive
+			if !e.sink.SendAudio(e.silence[:]) {
+				dropped++
+				continue
 			}
+			frameCount++
 		}
 	}
 }
