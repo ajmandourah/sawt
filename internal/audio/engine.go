@@ -25,9 +25,9 @@ const (
 	// BufioSize is the internal buffer size for reading FFmpeg stdout.
 	BufioSize = 32 * 1024
 
-	// FrameChannelBuffer provides ~320ms of decoupling between reader and sender.
-	// Increased from 4 to 8 to 16 to absorb network jitter.
-	FrameChannelBuffer = 16
+	// FrameChannelBuffer provides ~2.5s of decoupling between reader and sender.
+	// Increased to 128 to absorb network jitter.
+	FrameChannelBuffer = 128
 )
 
 // Sink abstracts the audio output destination (Mumble client).
