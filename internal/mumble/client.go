@@ -117,7 +117,7 @@ func (c *Client) connect() error {
 	gConfig.Attach(gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
 			log.Printf("Mumble connected, joining channel: %s", c.cfg.Channel)
-			
+
 			// Re-apply stereo encoder (codec config may have overwritten it)
 			// Use e.Client (gumble Client from event) instead of c.client (may be nil during handshake)
 			if c.cfg.Stereo {
@@ -132,7 +132,7 @@ func (c *Client) connect() error {
 					log.Printf("Re-applied stereo encoder after connect")
 				}
 			}
-			
+
 			c.joinChannel(c.cfg.Channel)
 			c.mu.Lock()
 			select {
