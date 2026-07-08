@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -42,9 +43,9 @@ const (
 
 // Sink abstracts the audio output destination (Mumble client).
 type Sink interface {
-	OpenAudio()                       // open audio channel before playback
-	CloseAudio()                      // close audio channel after playback
-	SendAudio(samples []int16) bool   // send one PCM frame; returns true if accepted
+	OpenAudio()                     // open audio channel before playback
+	CloseAudio()                    // close audio channel after playback
+	SendAudio(samples []int16) bool // send one PCM frame; returns true if accepted
 }
 
 // Engine manages a single FFmpeg playback session.
@@ -52,9 +53,9 @@ type Engine struct {
 	sink Sink
 
 	// FFmpeg process
-	cmd      *exec.Cmd
-	ytDlpCmd *exec.Cmd // yt-dlp process (when using ytdlp pipe source)
-	stdout   io.ReadCloser
+	cmd       *exec.Cmd
+	tmpFile   string        // temp file path (yt-dlp extracted audio)
+	stdout    io.ReadCloser
 
 	// Control
 	stopCh chan struct{} // closed to signal stop
@@ -99,34 +100,46 @@ func (e *Engine) Start(source string) error {
 	e.startupErrMu.Unlock()
 
 	var cmd *exec.Cmd
-	var ytDlpCmd *exec.Cmd
 	var stdout io.ReadCloser
 	var err error
+	var tmpPath string
 
 	if strings.HasPrefix(source, "ytdlp:") {
-		// yt-dlp pipe: yt-dlp extracts audio → pipes to FFmpeg stdin
-		// This avoids 403 errors from DASH URLs that require specific headers.
+		// yt-dlp downloads audio to a temp file, then FFmpeg reads it.
+		// -f "ba[ext=webm]": best audio WebM (Opus) — avoids -x postprocessing failures.
 		ytURL := strings.TrimPrefix(source, "ytdlp:")
-		ytDlpCmd = exec.Command("yt-dlp", "-x", "--audio-format", "best",
+		tmpFile, err := os.CreateTemp("", "sawt-*.webm")
+		if err != nil {
+			return fmt.Errorf("create temp file: %w", err)
+		}
+		tmpPath = tmpFile.Name()
+
+		ytDlpCmd := exec.Command("yt-dlp", "-f", "ba[ext=webm]",
 			"--no-playlist", "--restrict-filenames",
 			"--no-progress", "--no-warnings", "-q",
-			"--extractor-args", "youtube:player_client=android",
 			"-o", "-", ytURL)
-		stdout, err = ytDlpCmd.StdoutPipe()
-		if err != nil {
-			return fmt.Errorf("yt-dlp stdout pipe: %w", err)
-		}
-		// Capture yt-dlp stderr separately so it doesn't corrupt the pipe.
+		ytDlpCmd.Stdout = tmpFile
 		var ytDlpStderr bytes.Buffer
 		ytDlpCmd.Stderr = &ytDlpStderr
 
-		// FFmpeg reads from stdin (the yt-dlp pipe)
-		cmd = exec.Command("ffmpeg", "-i", "-",
+		if err := ytDlpCmd.Run(); err != nil {
+			tmpFile.Close()
+			os.Remove(tmpPath)
+			return fmt.Errorf("yt-dlp download: %w: %s", err, ytDlpStderr.String())
+		}
+		tmpFile.Close()
+
+		// FFmpeg reads the downloaded audio file
+		cmd = exec.Command("ffmpeg", "-i", tmpPath,
 			"-f", "s16le", "-acodec", "pcm_s16le",
 			"-ar", fmt.Sprintf("%d", SampleRate),
 			"-ac", fmt.Sprintf("%d", Channels),
 			"-loglevel", "error", "-y", "-")
-		cmd.Stdin = stdout
+		stdout, err = cmd.StdoutPipe()
+		if err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("ffmpeg stdout pipe: %w", err)
+		}
 	} else {
 		// Standard: FFmpeg reads from file or URL directly.
 		args := []string{
@@ -149,13 +162,6 @@ func (e *Engine) Start(source string) error {
 	var stderrBuf bytes.Buffer
 	cmd.Stderr = &stderrBuf
 
-	// Start yt-dlp first (if applicable), then FFmpeg.
-	if ytDlpCmd != nil {
-		if err := ytDlpCmd.Start(); err != nil {
-			stdout.Close()
-			return fmt.Errorf("start yt-dlp: %w", err)
-		}
-	}
 	if err := cmd.Start(); err != nil {
 		stdout.Close()
 		return fmt.Errorf("start ffmpeg: %w", err)
@@ -163,7 +169,7 @@ func (e *Engine) Start(source string) error {
 
 	e.mu.Lock()
 	e.cmd = cmd
-	e.ytDlpCmd = ytDlpCmd
+	e.tmpFile = tmpPath
 	e.stdout = stdout
 	e.mu.Unlock()
 
@@ -306,13 +312,10 @@ func (e *Engine) cleanup(reader io.ReadCloser) {
 	// Close audio channel to flush final frame
 	e.sink.CloseAudio()
 
-	// Kill yt-dlp first (its output feeds FFmpeg).
-	if e.ytDlpCmd != nil && e.ytDlpCmd.Process != nil {
-		if err := e.ytDlpCmd.Process.Kill(); err != nil {
-			log.Printf("Kill yt-dlp: %v", err)
-		}
-		e.ytDlpCmd.Wait()
-		e.ytDlpCmd = nil
+	// Remove temp file (yt-dlp extracted audio).
+	if e.tmpFile != "" {
+		os.Remove(e.tmpFile)
+		e.tmpFile = ""
 	}
 
 	if e.cmd != nil {
@@ -364,15 +367,6 @@ func (e *Engine) IsPlaying() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.cmd != nil
-}
-
-// isSendingAudio reports whether we've sent any audio frames yet.
-// Used to distinguish startup failures from mid-playback errors.
-func (e *Engine) isSendingAudio() bool {
-	// If FFmpeg stdout has produced any data, we're past startup
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.stdout != nil
 }
 
 // GetStartupError returns any FFmpeg startup error captured during
