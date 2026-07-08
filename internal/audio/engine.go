@@ -220,13 +220,12 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	}
 	encoder.SetBitrate(gopus.BitrateMaximum)
 
-	// Buffered channel absorbs bursty FFmpeg output.
-	// 200 frames = ~4 seconds of headroom for network streams.
-	frameCh := make(chan []int16, 200)
+	// Small buffer channel: reader pushes, sender pulls.
+	// 10 frames = 200ms headroom. Reader blocks when full,
+	// naturally pacing FFmpeg reads.
+	frameCh := make(chan []int16, 10)
 
-	// Reader goroutine: read PCM from FFmpeg, convert to int16, push to channel.
 	readerDone := make(chan struct{})
-	readerFrames := 0
 	go func() {
 		defer close(frameCh)
 		defer close(readerDone)
@@ -237,24 +236,13 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		for {
 			_, err := io.ReadFull(br, pcmBuf)
 			if err != nil {
-				// Log FFmpeg stderr for diagnosis
-				stderrStr := stderrBuf.String()
-				if stderrStr != "" {
-					log.Printf("FFmpeg stderr (%d frames): %s", readerFrames, stderrStr)
-				}
-				log.Printf("Reader goroutine exiting after %d frames: %v", readerFrames, err)
-				return // EOF or error — channel close will signal sender
+				return // EOF/error — channel close signals sender
 			}
-
-			readerFrames++
 			samples := bytesToInt16(pcmBuf)
 			select {
 			case frameCh <- samples:
 			case <-e.stopCh:
 				return
-			default:
-				// Channel full — drop to avoid blocking the reader.
-				// The sender will repeat the last good frame.
 			}
 		}
 	}()
@@ -262,11 +250,11 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	ticker := time.NewTicker(FrameDuration)
 	defer ticker.Stop()
 
-	var lastOpus []byte // cache last good Opus frame to repeat on gap
+	var lastOpus []byte // repeat on gap
 	frameCount := 0
 	dropped := 0
 	seq := int64(0)
-	finished := false
+	readerFinished := false
 
 	for {
 		select {
@@ -279,22 +267,54 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 			return
 
 		case <-readerDone:
-			// Reader finished — mark done. Next tick will exit.
-			finished = true
+			readerFinished = true
+			// Drain remaining frames in the channel
+			for {
+				select {
+				case samples, ok := <-frameCh:
+					if !ok {
+						stderrStr := stderrBuf.String()
+						if stderrStr != "" {
+							log.Printf("FFmpeg stderr (%d frames): %s", frameCount, stderrStr)
+						}
+						log.Printf("Audio stream ended after %d frames", frameCount)
+						e.waitFFmpeg()
+						return
+					}
+					opusData, encErr := encoder.Encode(samples, SamplesPerFrame, 4096)
+					if encErr != nil || len(opusData) == 0 {
+						continue
+					}
+					lastOpus = opusData
+					if !e.sink.SendOpus(opusData, seq) {
+						dropped++
+						continue
+					}
+					seq++
+					frameCount++
+				default:
+					// Channel empty — done draining
+					stderrStr := stderrBuf.String()
+					if stderrStr != "" {
+						log.Printf("FFmpeg stderr (%d frames): %s", frameCount, stderrStr)
+					}
+					log.Printf("Audio stream ended after %d frames", frameCount)
+					e.waitFFmpeg()
+					return
+				}
+			}
 
 		case samples, ok := <-frameCh:
 			if !ok {
-				// Channel closed (reader finished)
-				finished = true
+				// Channel closed unexpectedly
+				readerFinished = true
 				continue
 			}
-			// Got a fresh frame — encode and send
 			opusData, encErr := encoder.Encode(samples, SamplesPerFrame, 4096)
 			if encErr != nil || len(opusData) == 0 {
 				continue
 			}
 			lastOpus = opusData
-
 			if !e.sink.SendOpus(opusData, seq) {
 				dropped++
 				continue
@@ -303,12 +323,11 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 			frameCount++
 
 		case <-ticker.C:
-			if finished {
-				log.Printf("Audio stream ended after %d frames", frameCount)
-				e.waitFFmpeg()
+			if readerFinished {
+				// Should not reach here (drain handles exit)
 				return
 			}
-			// No fresh frame available — repeat last good frame to avoid gap.
+			// No frame available — repeat last good frame
 			if len(lastOpus) > 0 {
 				if !e.sink.SendOpus(lastOpus, seq) {
 					dropped++
