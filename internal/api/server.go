@@ -5,8 +5,10 @@ package api
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os/exec"
@@ -19,6 +21,9 @@ import (
 	"github.com/ladis/sawt/internal/queue"
 	"github.com/ladis/sawt/internal/source"
 )
+
+//go:embed static/*
+var staticFiles embed.FS
 
 // Server is the HTTP API server.
 type Server struct {
@@ -67,6 +72,14 @@ func (s *Server) Port() int {
 }
 
 func (s *Server) registerRoutes() {
+	// Static files (web UI)
+	staticSub, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Printf("API: failed to sub static files: %v", err)
+	} else {
+		s.mux.Handle("/", http.FileServer(http.FS(staticSub)))
+	}
+
 	// Library
 	s.mux.HandleFunc("GET /api/library", s.handleListLibrary)
 	s.mux.HandleFunc("GET /api/library/search", s.handleSearchLibrary)
