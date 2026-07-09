@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +14,8 @@ import (
 
 	"layeh.com/gumble/gumble"
 
+	"github.com/ladis/sawt/internal/api"
+	"github.com/ladis/sawt/internal/api/store"
 	"github.com/ladis/sawt/internal/audio"
 	"github.com/ladis/sawt/internal/command"
 	"github.com/ladis/sawt/internal/config"
@@ -29,6 +32,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Config error: %v", err)
 	}
+
+	// API server port (separate flag, defaults to 8080)
+	apiPort := flag.Int("api-port", 8080, "Port for the HTTP API server")
+	flag.Parse()
 
 	log.Printf("Sawt (صوت) starting...")
 	log.Printf("Server: %s | User: %s | Channel: %s", cfg.Server, cfg.Username, cfg.Channel)
@@ -71,6 +78,29 @@ func main() {
 		}
 	})
 
+	// ---- API Server ----
+	// Create the API store (scans music dir for tracks)
+	apiStore := store.New(cfg.MusicDir, cfg.YtDlpPath) // reuse ytdlp path as ffprobe fallback
+
+	// Create and start the HTTP API server
+	apiSrv := api.New(api.Config{
+		Port:     *apiPort,
+		Store:    apiStore,
+		QueueMgr: qm,
+		Engine:   engine,
+		MusicDir: cfg.MusicDir,
+		ProbeCmd: cfg.YtDlpPath, // reuse; ideally pass ffprobe path separately
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := apiSrv.Start(ctx); err != nil {
+			log.Printf("API server error: %v", err)
+		}
+	}()
+
 	log.Printf("Sawt is online and listening for commands (prefix: %s)", cfg.Prefix)
 
 	// Wait for shutdown signal
@@ -79,6 +109,7 @@ func main() {
 	<-sigCh
 
 	log.Printf("Shutting down...")
+	cancel() // stop API server
 	qm.Stop()
 	client.Stop()
 	os.Exit(0)

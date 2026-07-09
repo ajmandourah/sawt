@@ -4,6 +4,7 @@ package queue
 import (
 	"log"
 	"sync"
+	"time"
 
 	"github.com/ladis/sawt/internal/audio"
 	"github.com/ladis/sawt/internal/source"
@@ -40,6 +41,10 @@ type Manager struct {
 
 	// Audio engine
 	engine *audio.Engine
+
+	// Progress tracking
+	trackStartedAt time.Time // when the current track started playing
+	trackDuration  time.Duration // total duration of the current track (if known)
 
 	// Callbacks
 	onStateChange func(State)
@@ -187,6 +192,8 @@ func (m *Manager) stopCurrent() {
 		m.engine.Stop()
 	}
 	m.curr = nil
+	m.trackStartedAt = time.Time{}
+	m.trackDuration = 0
 }
 
 func (m *Manager) startNext() {
@@ -213,6 +220,10 @@ func (m *Manager) startNext() {
 		m.startNext() // try next
 		return
 	}
+
+	// Record when this track started for progress tracking
+	m.trackStartedAt = time.Now()
+	m.trackDuration = 0 // default: unknown duration
 
 	m.state = StatePlaying
 	m.emitStateChange()
@@ -248,4 +259,37 @@ func (m *Manager) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.items = m.items[:0]
+	m.trackStartedAt = time.Time{}
+	m.trackDuration = 0
+}
+
+// GetProgress returns the current playback progress as (elapsed, total) duration.
+// elapsed is computed from when the track started; total is the known duration if set.
+func (m *Manager) GetProgress() (elapsed time.Duration, total time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.state != StatePlaying || m.curr == nil {
+		return 0, 0
+	}
+	elapsed = time.Since(m.trackStartedAt)
+	total = m.trackDuration
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	return
+}
+
+// SetTrackDuration sets the known duration for the current track (used when
+// ffprobe or metadata provides it). Call before or during playback.
+func (m *Manager) SetTrackDuration(d time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.trackDuration = d
+}
+
+// GetState returns the current playback state as a string.
+func (m *Manager) GetState() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.state.String()
 }
