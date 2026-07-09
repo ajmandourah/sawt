@@ -173,23 +173,25 @@ func (jb *JitterBuffer) Flush() {
 
 // JitterSink wraps JitterBuffer to implement the Sink interface.
 type JitterSink struct {
-	jb  *JitterBuffer
-	seq int64
+	jb   *JitterBuffer
+	sink Sink
+	seq  int64
 }
 
 // NewJitterSink creates a new JitterSink.
-func NewJitterSink(jb *JitterBuffer) *JitterSink {
-	return &JitterSink{jb: jb}
+func NewJitterSink(jb *JitterBuffer, sink Sink) *JitterSink {
+	return &JitterSink{jb: jb, sink: sink}
 }
 
-// OpenAudio opens the audio channel (no-op for jitter buffer).
+// OpenAudio opens the audio channel (delegates to underlying sink).
 func (js *JitterSink) OpenAudio() {
-	js.seq = 0
+	js.sink.OpenAudio()
 }
 
 // CloseAudio closes the audio channel (flushes buffer).
 func (js *JitterSink) CloseAudio() {
 	js.jb.Flush()
+	js.sink.CloseAudio()
 }
 
 // SendAudio adds a packet to the jitter buffer.

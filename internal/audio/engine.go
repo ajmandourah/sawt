@@ -82,7 +82,7 @@ func New(sink Sink, stereo bool) *Engine {
 
 	// Create jitter buffer (200ms delay)
 	jitter := NewJitterBuffer(sink, 200, samplesPerFrame)
-	jitterSink := NewJitterSink(jitter)
+	jitterSink := NewJitterSink(jitter, sink)
 
 	return &Engine{
 		sink:            jitterSink,
