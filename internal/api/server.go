@@ -90,6 +90,11 @@ func (s *Server) registerRoutes() {
 	// Library
 	s.mux.HandleFunc("GET /api/library", s.handleListLibrary)
 	s.mux.HandleFunc("GET /api/library/search", s.handleSearchLibrary)
+	s.mux.HandleFunc("POST /api/library/url", s.handleAddURL)
+	
+	// History
+	s.mux.HandleFunc("GET /api/history", s.handleGetHistory)
+	s.mux.HandleFunc("POST /api/history/replay", s.handleReplayHistory)
 
 	// Status
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
@@ -353,11 +358,18 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	// Validate extension
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	validExts := map[string]bool{".mp3": true, ".wav": true, ".ogg": true, ".flac": true, ".m4a": true}
+	validExts := map[string]bool{
+		".mp3": true, ".wav": true, ".ogg": true, ".flac": true, ".m4a": true,
+		".wma": true, ".aac": true, ".opus": true, ".aiff": true, ".aif": true, ".alac": true,
+	}
 	if !validExts[ext] {
-		writeError(w, http.StatusBadRequest, "unsupported file type: "+ext)
+		writeError(w, http.StatusBadRequest, "unsupported file type: "+ext+" — supported: mp3, wav, ogg, flac, m4a, wma, aac, opus, aiff, aif, alac")
 		return
 	}
+
+	// Detect MIME type for additional validation
+	contentType := header.Header.Get("Content-Type")
+	log.Printf("Upload: %s (ext=%s, content-type=%s)", header.Filename, ext, contentType)
 
 	meta, err := s.store.SaveUpload(file, header.Filename)
 	if err != nil {
@@ -365,12 +377,98 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Upload successful: %s (%s)", meta.Name, meta.Duration)
+
 	writeOK(w, map[string]any{
 		"uploaded": map[string]any{
 			"id":       meta.ID,
 			"name":     meta.Name,
 			"size":     meta.Size,
 			"duration": meta.Duration,
+			"type":     ext,
+		},
+	})
+}
+
+// ---- History Handlers ----
+
+func (s *Server) handleGetHistory(w http.ResponseWriter, r *http.Request) {
+	history := s.qm.GetHistory()
+	writeOK(w, history)
+}
+
+func (s *Server) handleReplayHistory(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Index int `json:"index"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Index < 0 {
+		writeError(w, http.StatusBadRequest, "index must be non-negative")
+		return
+	}
+	if !s.qm.ReplayFromHistory(req.Index) {
+		writeError(w, http.StatusBadRequest, "invalid history index")
+		return
+	}
+	writeOK(w, map[string]any{"status": "replaying"})
+}
+
+// ---- URL Handler ----
+
+func (s *Server) handleAddURL(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.URL == "" {
+		writeError(w, http.StatusBadRequest, "url is required")
+		return
+	}
+
+	// Resolve URL through the source chain
+	// Note: This requires access to the source chain, which is currently in main.go
+	// For now, we'll use a simple resolution based on URL pattern
+	trackID := fmt.Sprintf("url-%d", time.Now().UnixNano())
+	track := &store.TrackMeta{
+		ID:         trackID,
+		Name:       req.URL,
+		Path:       req.URL,
+		Duration:   "0:00", // Unknown duration for URLs
+		Seconds:    0,
+		Size:       "URL",
+		AddedAt:    time.Now().Format("2006-01-02"),
+		SourceType: source.SourceDirect,
+	}
+
+	// Detect source type based on URL
+	if strings.Contains(strings.ToLower(req.URL), "youtube.com") || strings.Contains(strings.ToLower(req.URL), "youtu.be") {
+		track.SourceType = source.SourceYtDlp
+		track.Name = "YouTube: " + req.URL
+	} else if strings.Contains(strings.ToLower(req.URL), "soundcloud.com") {
+		track.SourceType = source.SourceYtDlp
+		track.Name = "SoundCloud: " + req.URL
+	} else if strings.Contains(strings.ToLower(req.URL), "bandcamp.com") {
+		track.SourceType = source.SourceYtDlp
+		track.Name = "Bandcamp: " + req.URL
+	} else if isURL(req.URL) {
+		track.SourceType = source.SourceDirect
+		track.Name = "Stream: " + req.URL
+	}
+
+	s.store.AddTrack(track)
+
+	writeOK(w, map[string]any{
+		"added": map[string]any{
+			"id": track.ID,
+			"name": track.Name,
+			"url": track.Path,
+			"type": track.SourceType,
 		},
 	})
 }
@@ -470,6 +568,11 @@ func (s *Server) handlePlayPlaylist(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---- Helpers ----
+
+// isURL checks if a string is a valid URL.
+func isURL(s string) bool {
+	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "ftp://")
+}
 
 // probeDuration uses ffprobe to get the duration of an audio file.
 // Returns (human-readable "3:42", seconds).

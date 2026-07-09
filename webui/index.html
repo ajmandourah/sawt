@@ -69,6 +69,10 @@
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
           Playlists
         </button>
+        <button onclick="switchTab('history')" data-tab="history" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          History
+        </button>
         <button onclick="switchTab('upload')" data-tab="upload" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
           Upload
@@ -111,6 +115,14 @@
           <div class="relative mb-5">
             <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             <input type="text" id="search-input" placeholder="Search tracks..." class="w-full pl-12 pr-4 py-3 bg-zinc-900/60 border border-zinc-800/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/40 transition-all duration-200 placeholder:text-zinc-600" oninput="filterLibrary()" />
+          </div>
+          <!-- URL Input -->
+          <div class="mb-5 p-4 bg-zinc-900/40 border border-zinc-800/50 rounded-xl">
+            <p class="text-sm font-medium text-zinc-300 mb-2">Add URL (YouTube, SoundCloud, direct stream)</p>
+            <div class="flex gap-2">
+              <input type="text" id="url-input" placeholder="https://youtube.com/watch?v=..." class="flex-1 px-4 py-2.5 bg-zinc-800/60 border border-zinc-700/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 placeholder:text-zinc-600" />
+              <button onclick="addURL()" class="px-4 py-2.5 bg-brand-500 hover:bg-brand-400 text-zinc-950 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap">Add</button>
+            </div>
           </div>
           <!-- View Toggle -->
           <div class="flex items-center justify-between mb-4">
@@ -213,6 +225,14 @@
           <div id="upload-progress" class="hidden mt-5 space-y-3"></div>
         </section>
 
+        <!-- ===== HISTORY TAB ===== -->
+        <section id="tab-history" class="tab-content hidden p-4 md:p-6 max-w-4xl mx-auto">
+          <h3 class="text-lg font-bold mb-4">Play History</h3>
+          <p class="text-sm text-zinc-500 mb-5">Recently played tracks. Click "Replay" to add back to queue.</p>
+          <div id="history-list" class="space-y-1.5"></div>
+          <p id="history-empty" class="text-center text-zinc-600 text-sm py-12">No play history yet.</p>
+        </section>
+
       </div>
 
       <!-- ===== MOBILE BOTTOM NAV ===== -->
@@ -230,6 +250,10 @@
           <button onclick="switchTab('playlists')" data-tab="playlists" class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
             <span class="text-[10px] font-medium">Playlists</span>
+          </button>
+          <button onclick="switchTab('history')" data-tab="history" class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span class="text-[10px] font-medium">History</span>
           </button>
           <button onclick="switchTab('upload')" data-tab="upload" class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
@@ -828,6 +852,21 @@
     }
   }
 
+  async function addURL() {
+    const urlInput = document.getElementById('url-input');
+    const url = urlInput.value.trim();
+    if (!url) return;
+    
+    try {
+      const res = await postAPI('/library/url', { url });
+      urlInput.value = '';
+      await loadLibrary();
+      toast('Added URL to library', 'success');
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
+  }
+
   async function loadQueue() {
     try {
       const res = await fetchAPI('/queue');
@@ -861,6 +900,77 @@
     }
   }
 
+  async function loadHistory() {
+    try {
+      const res = await fetchAPI('/history');
+      const history = res.data || [];
+      renderHistory(history);
+    } catch (err) {
+      console.error('Failed to load history:', err);
+    }
+  }
+
+  function renderHistory(history) {
+    const listEl = document.getElementById('history-list');
+    const emptyEl = document.getElementById('history-empty');
+
+    if (history.length === 0) {
+      listEl.innerHTML = '';
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+
+    emptyEl.classList.add('hidden');
+    listEl.innerHTML = history.map((h, i) => {
+      const timeAgo = getTimeAgo(h.playedAt);
+      return `
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/40 hover:bg-zinc-900/70 border border-transparent transition-all duration-200 group">
+          <div class="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium truncate text-zinc-200">${h.title}</p>
+            <p class="text-xs text-zinc-600">${h.sourceType} · ${formatDuration(h.duration)} · ${timeAgo}</p>
+          </div>
+          <button onclick="replayHistory(${i})" class="p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-brand-500/20 text-brand-400 transition-all duration-200" title="Replay">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function replayHistory(index) {
+    try {
+      await postAPI('/history/replay', { index });
+      toast('Replaying from history', 'success');
+      await loadQueue();
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
+  }
+
+  function getTimeAgo(dateStr) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHour = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHour / 24);
+
+    if (diffSec < 60) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHour < 24) return `${diffHour}h ago`;
+    return `${diffDay}d ago`;
+  }
+
+  function formatDuration(totalSecs) {
+    const m = Math.floor(totalSecs / 60);
+    const s = totalSecs % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
   async function loadStatus() {
     try {
       const res = await fetchAPI('/status');
@@ -882,7 +992,7 @@
   // ============================================================
   document.addEventListener('DOMContentLoaded', async () => {
     switchTab('library');
-    await Promise.all([loadLibrary(), loadQueue(), loadPlaylists(), loadStatus()]);
+    await Promise.all([loadLibrary(), loadQueue(), loadPlaylists(), loadHistory(), loadStatus()]);
     
     // Poll for queue updates every 2 seconds
     refreshInterval = setInterval(async () => {

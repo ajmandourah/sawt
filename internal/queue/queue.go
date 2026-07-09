@@ -46,9 +46,22 @@ type Manager struct {
 	trackStartedAt time.Time     // when the current track started playing
 	trackDuration  time.Duration // total duration of the current track (if known)
 
+	// History
+	history []*HistoryEntry // recently played tracks
+
 	// Callbacks
 	onStateChange func(State)
 	onTrackChange func(*audio.Track)
+}
+
+// HistoryEntry represents a played track in the history.
+type HistoryEntry struct {
+	Title       string            `json:"title"`
+	Source      string            `json:"source"`
+	SourceType  source.SourceType `json:"sourceType"`
+	RequestedBy string            `json:"requestedBy"`
+	PlayedAt    time.Time         `json:"playedAt"`
+	Duration    time.Duration     `json:"duration"`
 }
 
 // New creates a new queue manager.
@@ -249,6 +262,22 @@ func (m *Manager) startNext() {
 		}
 
 		log.Printf("Track finished: %s", currentTrack.Title)
+		
+		// Add to history
+		elapsed := time.Since(m.trackStartedAt)
+		m.history = append(m.history, &HistoryEntry{
+			Title:       currentTrack.Title,
+			Source:      currentTrack.Source,
+			SourceType:  currentTrack.SourceType,
+			RequestedBy: currentTrack.RequestedBy,
+			PlayedAt:    time.Now(),
+			Duration:    elapsed,
+		})
+		// Keep only last 100 entries
+		if len(m.history) > 100 {
+			m.history = m.history[len(m.history)-100:]
+		}
+		
 		m.stopCurrent()
 		m.startNext()
 	}()
@@ -292,4 +321,36 @@ func (m *Manager) GetState() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.state.String()
+}
+
+// GetHistory returns the playback history.
+func (m *Manager) GetHistory() []*HistoryEntry {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]*HistoryEntry, len(m.history))
+	copy(result, m.history)
+	return result
+}
+
+// ReplayFromHistory replays a track from history by index.
+func (m *Manager) ReplayFromHistory(index int) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if index < 0 || index >= len(m.history) {
+		return false
+	}
+	hEntry := m.history[index]
+	t := &audio.Track{
+		Title:       hEntry.Title,
+		Source:      hEntry.Source,
+		SourceType:  hEntry.SourceType,
+		RequestedBy: hEntry.RequestedBy,
+	}
+	m.curr = nil
+	m.trackStartedAt = time.Time{}
+	m.trackDuration = 0
+	m.engine.Stop()
+	m.items = append([]*audio.Track{t}, m.items...)
+	m.startNext()
+	return true
 }
