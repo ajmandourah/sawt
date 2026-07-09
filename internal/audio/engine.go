@@ -265,8 +265,6 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		readerTicker := time.NewTicker(FrameDuration)
 		defer readerTicker.Stop()
 
-		log.Printf("Reader goroutine started")
-
 		for {
 			select {
 			case <-e.stopCh:
