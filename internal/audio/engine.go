@@ -80,8 +80,8 @@ func New(sink Sink, stereo bool) *Engine {
 
 	silence := make([]int16, samplesPerFrame)
 
-	// Create jitter buffer (200ms delay, 100 packet buffer)
-	jitter := NewJitterBuffer(sink, 200, 100, samplesPerFrame)
+	// Create jitter buffer (200ms delay)
+	jitter := NewJitterBuffer(sink, 200, samplesPerFrame)
 	jitterSink := NewJitterSink(jitter)
 
 	return &Engine{
@@ -195,9 +195,11 @@ func (e *Engine) Start(source string) error {
 	e.mu.Unlock()
 
 	// Open audio channel for this playback session
+	log.Printf("Engine: opening audio sink")
 	e.sink.OpenAudio()
 
 	// Start playback goroutine
+	log.Printf("Engine: starting runLoop")
 	go e.runLoop(stdout, &stderrBuf)
 
 	return nil
