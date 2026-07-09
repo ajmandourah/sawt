@@ -222,7 +222,6 @@ func (m *Manager) startNext() {
 
 	// Prefix yt-dlp sources so the engine pipes yt-dlp → FFmpeg.
 	playSource := m.curr.Source
-	log.Printf("Queue.startNext: source=%q sourceType=%q (ytdlp=%v)", m.curr.Source, m.curr.SourceType, m.curr.SourceType == source.SourceYtDlp)
 	if m.curr.SourceType == source.SourceYtDlp {
 		playSource = "ytdlp:" + m.curr.Source
 	}
