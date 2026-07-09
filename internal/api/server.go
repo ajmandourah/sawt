@@ -28,6 +28,7 @@ var staticFiles embed.FS
 // Server is the HTTP API server.
 type Server struct {
 	port     int
+	addr     string
 	store    *store.Store
 	qm       *queue.Manager
 	engine   *audio.Engine
@@ -39,6 +40,7 @@ type Server struct {
 // Config holds the dependencies needed to construct a Server.
 type Config struct {
 	Port     int
+	Addr     string // bind address (default: ":" for all interfaces)
 	Store    *store.Store
 	QueueMgr *queue.Manager
 	Engine   *audio.Engine
@@ -48,8 +50,13 @@ type Config struct {
 
 // New creates and configures the API server.
 func New(cfg Config) *Server {
+	addr := cfg.Addr
+	if addr == "" {
+		addr = "0.0.0.0" // default: listen on all interfaces
+	}
 	s := &Server{
 		port:     cfg.Port,
+		addr:     addr,
 		store:    cfg.Store,
 		qm:       cfg.QueueMgr,
 		engine:   cfg.Engine,
@@ -108,7 +115,7 @@ func (s *Server) registerRoutes() {
 
 // Start launches the HTTP server. Blocks until context is done or server errors.
 func (s *Server) Start(ctx context.Context) error {
-	addr := fmt.Sprintf(":%d", s.port)
+	addr := fmt.Sprintf("%s:%d", s.addr, s.port)
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      s.mux,

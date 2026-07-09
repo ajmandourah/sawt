@@ -28,8 +28,9 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.SetOutput(os.Stderr)
 
-	// Register API port flag before config.Load() (which calls flag.Parse())
+	// Register API flags before config.Load() (which calls flag.Parse())
 	apiPort := flag.Int("api-port", 7071, "Port for the HTTP API server")
+	apiAddr := flag.String("api-addr", "0.0.0.0", "Bind address for the HTTP API server (e.g., 0.0.0.0, localhost, 127.0.0.1)")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -84,6 +85,7 @@ func main() {
 	// Create and start the HTTP API server
 	apiSrv := api.New(api.Config{
 		Port:     *apiPort,
+		Addr:     *apiAddr,
 		Store:    apiStore,
 		QueueMgr: qm,
 		Engine:   engine,
