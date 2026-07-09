@@ -28,14 +28,14 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.SetOutput(os.Stderr)
 
+	// Register API port flag BEFORE config.Load() (which calls flag.Parse())
+	apiPort := flag.Int("api-port", 7071, "Port for the HTTP API server")
+	flag.Parse()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Config error: %v", err)
 	}
-
-	// API server port (separate flag, defaults to 8080)
-	apiPort := flag.Int("api-port", 8080, "Port for the HTTP API server")
-	flag.Parse()
 
 	log.Printf("Sawt (صوت) starting...")
 	log.Printf("Server: %s | User: %s | Channel: %s", cfg.Server, cfg.Username, cfg.Channel)
