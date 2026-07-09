@@ -126,6 +126,7 @@ func (e *Engine) Start(source string) error {
 	var err error
 	var tmpPath string
 
+	log.Printf("Engine.Start: source=%q (hasPrefix ytdlp=%v)", source, strings.HasPrefix(source, "ytdlp:"))
 	if strings.HasPrefix(source, "ytdlp:") {
 		// yt-dlp downloads audio to a temp file, then FFmpeg reads it.
 		ytURL := strings.TrimPrefix(source, "ytdlp:")

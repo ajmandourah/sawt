@@ -27,26 +27,26 @@ var staticFiles embed.FS
 
 // Server is the HTTP API server.
 type Server struct {
-	port      int
-	addr      string
-	store     *store.Store
-	qm        *queue.Manager
-	engine    *audio.Engine
-	musicDir  string
-	probeCmd  string
+	port        int
+	addr        string
+	store       *store.Store
+	qm          *queue.Manager
+	engine      *audio.Engine
+	musicDir    string
+	probeCmd    string
 	sourceChain *source.Chain // resolver chain for URL resolution
-	mux       *http.ServeMux
+	mux         *http.ServeMux
 }
 
 // Config holds the dependencies needed to construct a Server.
 type Config struct {
-	Port     int
-	Addr     string // bind address (default: ":" for all interfaces)
-	Store    *store.Store
-	QueueMgr *queue.Manager
-	Engine   *audio.Engine
-	MusicDir string
-	ProbeCmd string
+	Port        int
+	Addr        string // bind address (default: ":" for all interfaces)
+	Store       *store.Store
+	QueueMgr    *queue.Manager
+	Engine      *audio.Engine
+	MusicDir    string
+	ProbeCmd    string
 	SourceChain *source.Chain // resolver chain for URL resolution
 }
 
@@ -57,15 +57,15 @@ func New(cfg Config) *Server {
 		addr = "0.0.0.0" // default: listen on all interfaces
 	}
 	s := &Server{
-		port:      cfg.Port,
-		addr:      addr,
-		store:     cfg.Store,
-		qm:        cfg.QueueMgr,
-		engine:    cfg.Engine,
-		musicDir:  cfg.MusicDir,
-		probeCmd:  cfg.ProbeCmd,
+		port:        cfg.Port,
+		addr:        addr,
+		store:       cfg.Store,
+		qm:          cfg.QueueMgr,
+		engine:      cfg.Engine,
+		musicDir:    cfg.MusicDir,
+		probeCmd:    cfg.ProbeCmd,
 		sourceChain: cfg.SourceChain,
-		mux:       http.NewServeMux(),
+		mux:         http.NewServeMux(),
 	}
 	s.registerRoutes()
 	return s
@@ -267,7 +267,7 @@ func (s *Server) handlePlayNow(w http.ResponseWriter, r *http.Request) {
 	t := &audio.Track{
 		Title:       track.Name,
 		Source:      track.Path,
-		SourceType:  source.SourceLocal,
+		SourceType:  track.SourceType,
 		RequestedBy: "web-ui",
 	}
 	s.qm.Enqueue(t)
@@ -307,7 +307,7 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 	t := &audio.Track{
 		Title:       track.Name,
 		Source:      track.Path,
-		SourceType:  source.SourceLocal,
+		SourceType:  track.SourceType,
 		RequestedBy: "web-ui",
 	}
 	s.qm.Enqueue(t)
