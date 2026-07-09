@@ -84,13 +84,14 @@ func main() {
 
 	// Create and start the WebUI server
 	webuiSrv := api.New(api.Config{
-		Port:     *webuiPort,
-		Addr:     *webuiAddr,
-		Store:    apiStore,
-		QueueMgr: qm,
-		Engine:   engine,
-		MusicDir: cfg.MusicDir,
-		ProbeCmd: cfg.YtDlpPath, // reuse; ideally pass ffprobe path separately
+		Port:        *webuiPort,
+		Addr:        *webuiAddr,
+		Store:       apiStore,
+		QueueMgr:    qm,
+		Engine:      engine,
+		MusicDir:    cfg.MusicDir,
+		ProbeCmd:    cfg.YtDlpPath, // reuse; ideally pass ffprobe path separately
+		SourceChain: chain,
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())

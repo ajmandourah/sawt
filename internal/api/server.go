@@ -27,14 +27,15 @@ var staticFiles embed.FS
 
 // Server is the HTTP API server.
 type Server struct {
-	port     int
-	addr     string
-	store    *store.Store
-	qm       *queue.Manager
-	engine   *audio.Engine
-	musicDir string
-	probeCmd string
-	mux      *http.ServeMux
+	port      int
+	addr      string
+	store     *store.Store
+	qm        *queue.Manager
+	engine    *audio.Engine
+	musicDir  string
+	probeCmd  string
+	sourceChain *source.Chain // resolver chain for URL resolution
+	mux       *http.ServeMux
 }
 
 // Config holds the dependencies needed to construct a Server.
@@ -46,6 +47,7 @@ type Config struct {
 	Engine   *audio.Engine
 	MusicDir string
 	ProbeCmd string
+	SourceChain *source.Chain // resolver chain for URL resolution
 }
 
 // New creates and configures the API server.
@@ -55,14 +57,15 @@ func New(cfg Config) *Server {
 		addr = "0.0.0.0" // default: listen on all interfaces
 	}
 	s := &Server{
-		port:     cfg.Port,
-		addr:     addr,
-		store:    cfg.Store,
-		qm:       cfg.QueueMgr,
-		engine:   cfg.Engine,
-		musicDir: cfg.MusicDir,
-		probeCmd: cfg.ProbeCmd,
-		mux:      http.NewServeMux(),
+		port:      cfg.Port,
+		addr:      addr,
+		store:     cfg.Store,
+		qm:        cfg.QueueMgr,
+		engine:    cfg.Engine,
+		musicDir:  cfg.MusicDir,
+		probeCmd:  cfg.ProbeCmd,
+		sourceChain: cfg.SourceChain,
+		mux:       http.NewServeMux(),
 	}
 	s.registerRoutes()
 	return s
@@ -431,22 +434,55 @@ func (s *Server) handleAddURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve URL through the source chain
-	// Note: This requires access to the source chain, which is currently in main.go
-	// For now, we'll use a simple resolution based on URL pattern
+	// Resolve URL through the source chain if available
+	if s.sourceChain != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		resolved, err := s.sourceChain.Resolve(ctx, req.URL)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "resolve: "+err.Error())
+			return
+		}
+
+		trackID := fmt.Sprintf("url-%d", time.Now().UnixNano())
+		track := &store.TrackMeta{
+			ID:         trackID,
+			Name:       resolved.Title,
+			Path:       resolved.URL,
+			Duration:   "0:00", // Duration will be probed later
+			Seconds:    0,
+			Size:       "URL",
+			AddedAt:    time.Now().Format("2006-01-02"),
+			SourceType: resolved.Type,
+		}
+
+		s.store.AddTrack(track)
+
+		writeOK(w, map[string]any{
+			"added": map[string]any{
+				"id":   track.ID,
+				"name": track.Name,
+				"url":  track.Path,
+				"type": track.SourceType,
+			},
+		})
+		return
+	}
+
+	// Fallback: simple detection without chain
 	trackID := fmt.Sprintf("url-%d", time.Now().UnixNano())
 	track := &store.TrackMeta{
 		ID:         trackID,
 		Name:       req.URL,
 		Path:       req.URL,
-		Duration:   "0:00", // Unknown duration for URLs
+		Duration:   "0:00",
 		Seconds:    0,
 		Size:       "URL",
 		AddedAt:    time.Now().Format("2006-01-02"),
 		SourceType: source.SourceDirect,
 	}
 
-	// Detect source type based on URL
 	if strings.Contains(strings.ToLower(req.URL), "youtube.com") || strings.Contains(strings.ToLower(req.URL), "youtu.be") {
 		track.SourceType = source.SourceYtDlp
 		track.Name = "YouTube: " + req.URL
@@ -456,9 +492,6 @@ func (s *Server) handleAddURL(w http.ResponseWriter, r *http.Request) {
 	} else if strings.Contains(strings.ToLower(req.URL), "bandcamp.com") {
 		track.SourceType = source.SourceYtDlp
 		track.Name = "Bandcamp: " + req.URL
-	} else if isURL(req.URL) {
-		track.SourceType = source.SourceDirect
-		track.Name = "Stream: " + req.URL
 	}
 
 	s.store.AddTrack(track)
