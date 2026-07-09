@@ -810,6 +810,7 @@
 
   function startProgress() {
     stopProgress();
+    if (totalSeconds <= 0) return; // Don't auto-skip tracks with unknown duration
     progressInterval = setInterval(() => {
       progressSeconds++;
       if (progressSeconds >= totalSeconds) {
