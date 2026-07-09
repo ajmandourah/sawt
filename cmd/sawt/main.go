@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// Create audio engine
-	engine := audio.New(client, cfg.Stereo, cfg.JitterBuf, cfg.JitterDelay)
+	engine := audio.New(client, cfg.Stereo, cfg.JitterBuf, cfg.JitterDelay, cfg.BufferFrames)
 
 	// Create queue manager
 	qm := queue.New(engine)

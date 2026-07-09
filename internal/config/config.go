@@ -32,9 +32,10 @@ type Config struct {
 	YtDlpPath string // path to yt-dlp binary (default: "yt-dlp")
 
 	// Audio
-	Stereo    bool // enable stereo audio (requires Mumble 1.4.0+)
-	JitterBuf bool // enable jitter buffer for smoother playback
-	JitterDelay int // jitter buffer delay in ms (default: 100)
+	Stereo       bool // enable stereo audio (requires Mumble 1.4.0+)
+	JitterBuf    bool // enable jitter buffer for smoother playback
+	JitterDelay  int  // jitter buffer delay in ms (default: 100)
+	BufferFrames int  // audio buffer size in frames (default: 128)
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -46,9 +47,10 @@ func DefaultConfig() *Config {
 		Prefix:    "!",
 		YtDlpPath: "yt-dlp",
 		MusicDir:  "./music",
-		Stereo:    false,
-		JitterBuf: false,
-		JitterDelay: 100,
+		Stereo:       false,
+		JitterBuf:    false,
+		JitterDelay:  100,
+		BufferFrames: 128,
 	}
 }
 
@@ -70,6 +72,7 @@ func Load() (*Config, error) {
 	flagStereo := flag.Bool("stereo", cfg.Stereo, "Enable stereo audio")
 	flagJitter := flag.Bool("jitter", cfg.JitterBuf, "Enable jitter buffer")
 	flagJitterDelay := flag.Int("jitter-delay", cfg.JitterDelay, "Jitter buffer delay in ms")
+	flagBuffer := flag.Int("buffer", cfg.BufferFrames, "Audio buffer size in frames")
 	flagConfig := flag.String("config", "", "Path to YAML config file")
 	flag.Parse()
 
@@ -97,6 +100,7 @@ func Load() (*Config, error) {
 	cfg.Stereo = *flagStereo
 	cfg.JitterBuf = *flagJitter
 	cfg.JitterDelay = *flagJitterDelay
+	cfg.BufferFrames = *flagBuffer
 
 	// Validate
 	if err := cfg.validate(); err != nil {
@@ -150,6 +154,10 @@ func loadYAML(cfg *Config, path string) error {
 		case "jitter-delay":
 			if n, err := strconv.Atoi(v); err == nil {
 				cfg.JitterDelay = n
+			}
+		case "buffer":
+			if n, err := strconv.Atoi(v); err == nil {
+				cfg.BufferFrames = n
 			}
 		}
 	}

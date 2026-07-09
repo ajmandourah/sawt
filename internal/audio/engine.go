@@ -65,10 +65,11 @@ type Engine struct {
 	channels        int
 	bytesPerFrame   int
 	samplesPerFrame int
+	bufferFrames    int  // configurable buffer size
 }
 
 // New creates a new Engine ready to play.
-func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs int) *Engine {
+func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs, bufferFrames int) *Engine {
 	channels := 1
 	bytesPerFrame := 1920
 	samplesPerFrame := 960
@@ -99,6 +100,7 @@ func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs int) *Engine {
 		channels:        channels,
 		bytesPerFrame:   bytesPerFrame,
 		samplesPerFrame: samplesPerFrame,
+		bufferFrames:    bufferFrames,
 		silence:         silence,
 	}
 }
@@ -247,7 +249,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer ticker.Stop()
 
 	// Channel for passing frames from reader to sender
-	pcmCh := make(chan []int16, FrameChannelBuffer)
+	pcmCh := make(chan []int16, e.bufferFrames)
 
 	// Reader goroutine: read raw bytes, convert to int16, push to channel
 	readerDone := make(chan struct{})
