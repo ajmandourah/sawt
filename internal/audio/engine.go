@@ -41,6 +41,9 @@ type Sink interface {
 type Engine struct {
 	sink Sink
 
+	// Jitter buffer for smoothing playback
+	jitter *JitterBuffer
+
 	// FFmpeg process
 	cmd     *exec.Cmd
 	tmpFile string
@@ -77,8 +80,13 @@ func New(sink Sink, stereo bool) *Engine {
 
 	silence := make([]int16, samplesPerFrame)
 
+	// Create jitter buffer (200ms delay, 100 packet buffer)
+	jitter := NewJitterBuffer(sink, 200, 100, samplesPerFrame)
+	jitterSink := NewJitterSink(jitter)
+
 	return &Engine{
-		sink:            sink,
+		sink:            jitterSink,
+		jitter:          jitter,
 		stopCh:          make(chan struct{}),
 		doneCh:          make(chan struct{}),
 		channels:        channels,
