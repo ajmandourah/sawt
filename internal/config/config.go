@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 // Config holds all runtime configuration for the Sawt bot.
@@ -31,7 +32,9 @@ type Config struct {
 	YtDlpPath string // path to yt-dlp binary (default: "yt-dlp")
 
 	// Audio
-	Stereo bool // enable stereo audio (requires Mumble 1.4.0+)
+	Stereo    bool // enable stereo audio (requires Mumble 1.4.0+)
+	JitterBuf bool // enable jitter buffer for smoother playback
+	JitterDelay int // jitter buffer delay in ms (default: 100)
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -44,6 +47,8 @@ func DefaultConfig() *Config {
 		YtDlpPath: "yt-dlp",
 		MusicDir:  "./music",
 		Stereo:    false,
+		JitterBuf: false,
+		JitterDelay: 100,
 	}
 }
 
@@ -63,6 +68,8 @@ func Load() (*Config, error) {
 	flagPrefix := flag.String("prefix", cfg.Prefix, "Command prefix character")
 	flagYtDlp := flag.String("ytdlp", cfg.YtDlpPath, "Path to yt-dlp binary")
 	flagStereo := flag.Bool("stereo", cfg.Stereo, "Enable stereo audio")
+	flagJitter := flag.Bool("jitter", cfg.JitterBuf, "Enable jitter buffer")
+	flagJitterDelay := flag.Int("jitter-delay", cfg.JitterDelay, "Jitter buffer delay in ms")
 	flagConfig := flag.String("config", "", "Path to YAML config file")
 	flag.Parse()
 
@@ -88,6 +95,8 @@ func Load() (*Config, error) {
 	cfg.Prefix = *flagPrefix
 	cfg.YtDlpPath = *flagYtDlp
 	cfg.Stereo = *flagStereo
+	cfg.JitterBuf = *flagJitter
+	cfg.JitterDelay = *flagJitterDelay
 
 	// Validate
 	if err := cfg.validate(); err != nil {
@@ -136,6 +145,12 @@ func loadYAML(cfg *Config, path string) error {
 			cfg.YtDlpPath = v
 		case "stereo":
 			cfg.Stereo = v == "true"
+		case "jitter":
+			cfg.JitterBuf = v == "true"
+		case "jitter-delay":
+			if n, err := strconv.Atoi(v); err == nil {
+				cfg.JitterDelay = n
+			}
 		}
 	}
 

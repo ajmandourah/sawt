@@ -96,7 +96,7 @@ func (jb *JitterBuffer) AddPacket(seq int64, samples []int16, isLast bool) {
 // process runs the jitter buffer processing loop.
 func (jb *JitterBuffer) process() {
 	log.Printf("JitterBuffer: process starting, delay=%v", jb.delay)
-	
+
 	// Initial delay to fill buffer
 	time.Sleep(jb.delay)
 	log.Printf("JitterBuffer: delay complete, heap size=%d", jb.heap.Len())

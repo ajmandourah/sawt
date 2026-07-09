@@ -68,7 +68,7 @@ type Engine struct {
 }
 
 // New creates a new Engine ready to play.
-func New(sink Sink, stereo bool) *Engine {
+func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs int) *Engine {
 	channels := 1
 	bytesPerFrame := 1920
 	samplesPerFrame := 960
@@ -80,13 +80,20 @@ func New(sink Sink, stereo bool) *Engine {
 
 	silence := make([]int16, samplesPerFrame)
 
-	// Create jitter buffer (200ms delay)
-	jitter := NewJitterBuffer(sink, 200, samplesPerFrame)
-	jitterSink := NewJitterSink(jitter, sink)
+	var finalSink Sink
+	if jitterBuf {
+		// Create jitter buffer with configurable delay
+		jitter := NewJitterBuffer(sink, jitterDelayMs, samplesPerFrame)
+		finalSink = NewJitterSink(jitter, sink)
+		log.Printf("Engine: using jitter buffer with %dms delay", jitterDelayMs)
+	} else {
+		finalSink = sink
+		log.Printf("Engine: jitter buffer disabled")
+	}
 
 	return &Engine{
-		sink:            jitterSink,
-		jitter:          jitter,
+		sink:            finalSink,
+		jitter:          nil, // only set if jitter buffer is used
 		stopCh:          make(chan struct{}),
 		doneCh:          make(chan struct{}),
 		channels:        channels,
