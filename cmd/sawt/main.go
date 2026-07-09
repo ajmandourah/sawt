@@ -28,9 +28,9 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.SetOutput(os.Stderr)
 
-	// Register API flags before config.Load() (which calls flag.Parse())
-	apiPort := flag.Int("api-port", 7071, "Port for the HTTP API server")
-	apiAddr := flag.String("api-addr", "0.0.0.0", "Bind address for the HTTP API server (e.g., 0.0.0.0, localhost, 127.0.0.1)")
+	// Register WebUI flags before config.Load() (which calls flag.Parse())
+	webuiPort := flag.Int("webui-port", 7071, "Port for the WebUI server")
+	webuiAddr := flag.String("webui-addr", "0.0.0.0", "Bind address for the WebUI server (e.g., 0.0.0.0, localhost, 127.0.0.1)")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -82,10 +82,10 @@ func main() {
 	// Create the API store (scans music dir for tracks)
 	apiStore := store.New(cfg.MusicDir, cfg.YtDlpPath) // reuse ytdlp path as ffprobe fallback
 
-	// Create and start the HTTP API server
-	apiSrv := api.New(api.Config{
-		Port:     *apiPort,
-		Addr:     *apiAddr,
+	// Create and start the WebUI server
+	webuiSrv := api.New(api.Config{
+		Port:     *webuiPort,
+		Addr:     *webuiAddr,
 		Store:    apiStore,
 		QueueMgr: qm,
 		Engine:   engine,
@@ -97,8 +97,8 @@ func main() {
 	defer cancel()
 
 	go func() {
-		if err := apiSrv.Start(ctx); err != nil {
-			log.Printf("API server error: %v", err)
+		if err := webuiSrv.Start(ctx); err != nil {
+			log.Printf("WebUI server error: %v", err)
 		}
 	}()
 
