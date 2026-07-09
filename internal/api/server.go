@@ -247,36 +247,49 @@ func (s *Server) handlePlayNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var track *store.TrackMeta
+	// Use source chain to resolve the input (same as Mumble chat)
+	input := req.Path
 	if req.ID != "" {
-		track = s.store.GetTrack(req.ID)
-	} else if req.Path != "" {
-		track = &store.TrackMeta{Path: req.Path, Name: filepath.Base(req.Path)}
-	} else {
+		track := s.store.GetTrack(req.ID)
+		if track == nil {
+			writeError(w, http.StatusNotFound, "track not found")
+			return
+		}
+		input = track.Path
+	}
+
+	if input == "" {
 		writeError(w, http.StatusBadRequest, "provide path or id")
 		return
 	}
 
-	if track == nil {
-		writeError(w, http.StatusNotFound, "track not found")
+	// Resolve through the source chain (same as Mumble !play command)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	resolved, err := s.sourceChain.Resolve(ctx, input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "resolve: "+err.Error())
 		return
 	}
 
-	_, durSec := probeDuration(track.Path, s.probeCmd)
-
 	t := &audio.Track{
-		Title:       track.Name,
-		Source:      track.Path,
-		SourceType:  track.SourceType,
+		Title:       resolved.Title,
+		Source:      resolved.URL,
+		SourceType:  resolved.Type,
 		RequestedBy: "web-ui",
 	}
 	s.qm.Enqueue(t)
 
-	if durSec > 0 {
-		s.qm.SetTrackDuration(time.Duration(durSec) * time.Second)
+	// Probe duration for progress tracking
+	if s.probeCmd != "" {
+		_, durSec := probeDuration(resolved.URL, s.probeCmd)
+		if durSec > 0 {
+			s.qm.SetTrackDuration(time.Duration(durSec) * time.Second)
+		}
 	}
 
-	writeOK(w, map[string]any{"name": track.Name, "status": "playing"})
+	writeOK(w, map[string]any{"name": resolved.Title, "status": "playing"})
 }
 
 func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
@@ -289,30 +302,40 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var track *store.TrackMeta
+	// Use source chain to resolve the input (same as Mumble chat)
+	input := req.Path
 	if req.ID != "" {
-		track = s.store.GetTrack(req.ID)
-	} else if req.Path != "" {
-		track = &store.TrackMeta{Path: req.Path, Name: filepath.Base(req.Path)}
-	} else {
+		track := s.store.GetTrack(req.ID)
+		if track == nil {
+			writeError(w, http.StatusNotFound, "track not found")
+			return
+		}
+		input = track.Path
+	}
+
+	if input == "" {
 		writeError(w, http.StatusBadRequest, "provide path or id")
 		return
 	}
 
-	if track == nil {
-		writeError(w, http.StatusNotFound, "track not found")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	resolved, err := s.sourceChain.Resolve(ctx, input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "resolve: "+err.Error())
 		return
 	}
 
 	t := &audio.Track{
-		Title:       track.Name,
-		Source:      track.Path,
-		SourceType:  track.SourceType,
+		Title:       resolved.Title,
+		Source:      resolved.URL,
+		SourceType:  resolved.Type,
 		RequestedBy: "web-ui",
 	}
 	s.qm.Enqueue(t)
 
-	writeOK(w, map[string]any{"name": track.Name, "status": "enqueued"})
+	writeOK(w, map[string]any{"name": resolved.Title, "status": "enqueued"})
 }
 
 func (s *Server) handleSkip(w http.ResponseWriter, r *http.Request) {
@@ -575,12 +598,20 @@ func (s *Server) handlePlayPlaylist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enqueue all tracks
+	// Enqueue all tracks using source chain (same as Mumble chat)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
 	for _, t := range tracks {
+		resolved, err := s.sourceChain.Resolve(ctx, t.Path)
+		if err != nil {
+			log.Printf("Failed to resolve track %s: %v", t.Name, err)
+			continue
+		}
 		track := &audio.Track{
-			Title:       t.Name,
-			Source:      t.Path,
-			SourceType:  source.SourceLocal,
+			Title:       resolved.Title,
+			Source:      resolved.URL,
+			SourceType:  resolved.Type,
 			RequestedBy: "web-ui",
 		}
 		s.qm.Enqueue(track)
@@ -588,9 +619,12 @@ func (s *Server) handlePlayPlaylist(w http.ResponseWriter, r *http.Request) {
 
 	// Play the first track
 	first := tracks[0]
-	_, durSec := probeDuration(first.Path, s.probeCmd)
-	if durSec > 0 {
-		s.qm.SetTrackDuration(time.Duration(durSec) * time.Second)
+	resolved, err := s.sourceChain.Resolve(ctx, first.Path)
+	if err == nil && s.probeCmd != "" {
+		_, durSec := probeDuration(resolved.URL, s.probeCmd)
+		if durSec > 0 {
+			s.qm.SetTrackDuration(time.Duration(durSec) * time.Second)
+		}
 	}
 
 	writeOK(w, map[string]any{

@@ -172,7 +172,7 @@ func (e *Engine) Start(source string) error {
 	} else {
 		// Standard: FFmpeg reads from file or URL directly.
 		args := []string{
-			"-i", source,
+			"-re", "-i", source,
 			"-f", "s16le",
 			"-acodec", "pcm_s16le",
 			"-ar", fmt.Sprintf("%d", SampleRate),
@@ -264,6 +264,8 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		// Throttle reader to match playback rate (50Hz = 20ms per frame)
 		readerTicker := time.NewTicker(FrameDuration)
 		defer readerTicker.Stop()
+
+		log.Printf("Reader goroutine started")
 
 		for {
 			select {
