@@ -25,8 +25,9 @@ const (
 	// BufioSize is the internal buffer size for reading FFmpeg stdout.
 	BufioSize = 32 * 1024
 
-	// FrameChannelBuffer provides ~80ms of decoupling between reader and sender.
-	FrameChannelBuffer = 4
+	// FrameChannelBuffer provides ~2.5s of decoupling between reader and sender.
+	// Increased to 128 to absorb network jitter.
+	FrameChannelBuffer = 128
 )
 
 // Sink abstracts the audio output destination (Mumble client).
@@ -39,6 +40,9 @@ type Sink interface {
 // Engine manages a single FFmpeg playback session.
 type Engine struct {
 	sink Sink
+
+	// Jitter buffer for smoothing playback
+	jitter *JitterBuffer
 
 	// FFmpeg process
 	cmd     *exec.Cmd
@@ -58,32 +62,46 @@ type Engine struct {
 	silence []int16
 
 	// Audio format (mono or stereo)
-	channels      int
-	bytesPerFrame int
+	channels        int
+	bytesPerFrame   int
 	samplesPerFrame int
+	bufferFrames    int // configurable buffer size
 }
 
 // New creates a new Engine ready to play.
-func New(sink Sink, stereo bool) *Engine {
+func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs, bufferFrames int) *Engine {
 	channels := 1
 	bytesPerFrame := 1920
 	samplesPerFrame := 960
 	if stereo {
 		channels = 2
 		bytesPerFrame = 3840
-		samplesPerFrame = 1920
+		samplesPerFrame = 1920 // interleaved L/R
 	}
 
 	silence := make([]int16, samplesPerFrame)
 
+	var finalSink Sink
+	if jitterBuf {
+		// Create jitter buffer with configurable delay
+		jitter := NewJitterBuffer(sink, jitterDelayMs, samplesPerFrame)
+		finalSink = NewJitterSink(jitter, sink)
+		log.Printf("Engine: using jitter buffer with %dms delay", jitterDelayMs)
+	} else {
+		finalSink = sink
+		log.Printf("Engine: jitter buffer disabled")
+	}
+
 	return &Engine{
-		sink:          sink,
-		stopCh:        make(chan struct{}),
-		doneCh:        make(chan struct{}),
-		channels:      channels,
-		bytesPerFrame: bytesPerFrame,
+		sink:            finalSink,
+		jitter:          nil, // only set if jitter buffer is used
+		stopCh:          make(chan struct{}),
+		doneCh:          make(chan struct{}),
+		channels:        channels,
+		bytesPerFrame:   bytesPerFrame,
 		samplesPerFrame: samplesPerFrame,
-		silence:       silence,
+		bufferFrames:    bufferFrames,
+		silence:         silence,
 	}
 }
 
@@ -186,9 +204,11 @@ func (e *Engine) Start(source string) error {
 	e.mu.Unlock()
 
 	// Open audio channel for this playback session
+	log.Printf("Engine: opening audio sink")
 	e.sink.OpenAudio()
 
 	// Start playback goroutine
+	log.Printf("Engine: starting runLoop")
 	go e.runLoop(stdout, &stderrBuf)
 
 	return nil
@@ -229,7 +249,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer ticker.Stop()
 
 	// Channel for passing frames from reader to sender
-	pcmCh := make(chan []int16, FrameChannelBuffer)
+	pcmCh := make(chan []int16, e.bufferFrames)
 
 	// Reader goroutine: read raw bytes, convert to int16, push to channel
 	readerDone := make(chan struct{})

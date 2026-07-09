@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"layeh.com/gopus"
 	"layeh.com/gumble/gumble"
 	"layeh.com/gumble/gumbleutil"
-	"layeh.com/gopus"
 	_ "layeh.com/gumble/opus" // register Opus codec
 
 	"github.com/ladis/sawt/internal/config"
@@ -42,7 +42,27 @@ type StereoEncoder struct {
 func (e *StereoEncoder) ID() int { return 4 }
 
 func (e *StereoEncoder) Encode(pcm []int16, frameSize, maxDataBytes int) ([]byte, error) {
-	return e.enc.Encode(pcm, frameSize, maxDataBytes)
+	// Log encoder calls for debugging
+	log.Printf("StereoEncoder.Encode: pcm=%d samples, frameSize=%d, maxDataBytes=%d", len(pcm), frameSize, maxDataBytes)
+
+	// gumble passes total samples as frameSize, but Opus expects samples per channel
+	// For stereo interleaved: frameSize should be len(pcm)/2
+	// Verify encoder is configured for 2 channels
+	if e.enc == nil {
+		log.Printf("StereoEncoder: encoder is nil!")
+		return nil, fmt.Errorf("encoder is nil")
+	}
+
+	correctedFrameSize := frameSize / 2
+	if correctedFrameSize <= 0 {
+		correctedFrameSize = 1
+	}
+
+	result, err := e.enc.Encode(pcm, correctedFrameSize, maxDataBytes)
+	if err != nil {
+		log.Printf("StereoEncoder.Encode error: %v", err)
+	}
+	return result, err
 }
 
 func (e *StereoEncoder) Reset() {
@@ -79,10 +99,40 @@ func (c *Client) connect() error {
 	// Attach auto-bitrate listener
 	gConfig.Attach(gumbleutil.AutoBitrate)
 
+	// Create stereo encoder if needed (will be re-applied after codec config)
+	var stereoEnc *StereoEncoder
+	if c.cfg.Stereo {
+		log.Printf("Creating stereo Opus encoder...")
+		enc, err := gopus.NewEncoder(gumble.AudioSampleRate, 2, gopus.Voip)
+		if err != nil {
+			log.Printf("ERROR: Failed to create stereo Opus encoder: %v", err)
+		} else {
+			enc.SetBitrate(gopus.BitrateMaximum)
+			stereoEnc = &StereoEncoder{enc: enc}
+			log.Printf("Successfully created stereo Opus encoder")
+		}
+	}
+
 	// Attach our event listener
 	gConfig.Attach(gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
 			log.Printf("Mumble connected, joining channel: %s", c.cfg.Channel)
+
+			// Re-apply stereo encoder (codec config may have overwritten it)
+			// Use e.Client (gumble Client from event) instead of c.client (may be nil during handshake)
+			if c.cfg.Stereo {
+				if stereoEnc == nil {
+					log.Printf("ERROR: stereoEnc is nil!")
+				} else if stereoEnc.enc == nil {
+					log.Printf("ERROR: stereoEnc.enc is nil (encoder creation failed)!")
+				} else if e.Client == nil {
+					log.Printf("ERROR: e.Client is nil!")
+				} else {
+					e.Client.AudioEncoder = stereoEnc
+					log.Printf("Re-applied stereo encoder after connect")
+				}
+			}
+
 			c.joinChannel(c.cfg.Channel)
 			c.mu.Lock()
 			select {
@@ -120,19 +170,6 @@ func (c *Client) connect() error {
 	client, err := gumble.DialWithDialer(new(net.Dialer), c.cfg.Server, gConfig, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("gumble dial: %w", err)
-	}
-
-	// Override audio encoder for stereo support
-	if c.cfg.Stereo {
-		stereoEnc := &StereoEncoder{
-			enc: func() *gopus.Encoder {
-				e, _ := gopus.NewEncoder(gumble.AudioSampleRate, 2, gopus.Voip)
-				e.SetBitrate(gopus.BitrateMaximum)
-				return e
-			}(),
-		}
-		client.AudioEncoder = stereoEnc
-		log.Printf("Using stereo Opus encoder (2 channels)")
 	}
 
 	c.client = client
