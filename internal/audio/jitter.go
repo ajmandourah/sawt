@@ -77,6 +77,7 @@ func (jb *JitterBuffer) AddPacket(seq int64, samples []int16, isLast bool) {
 
 	// Add to heap
 	heap.Push(&jb.heap, pkt)
+	log.Printf("JitterBuffer: added packet %d, heap size=%d", seq, jb.heap.Len())
 
 	// Start processing if not running
 	if !jb.running {
@@ -84,6 +85,7 @@ func (jb *JitterBuffer) AddPacket(seq int64, samples []int16, isLast bool) {
 		if jb.seq == -1 {
 			jb.seq = pkt.Sequence
 		}
+		log.Printf("JitterBuffer: starting process goroutine")
 		go jb.process()
 	}
 
@@ -93,8 +95,11 @@ func (jb *JitterBuffer) AddPacket(seq int64, samples []int16, isLast bool) {
 
 // process runs the jitter buffer processing loop.
 func (jb *JitterBuffer) process() {
+	log.Printf("JitterBuffer: process starting, delay=%v", jb.delay)
+	
 	// Initial delay to fill buffer
 	time.Sleep(jb.delay)
+	log.Printf("JitterBuffer: delay complete, heap size=%d", jb.heap.Len())
 
 	for {
 		jb.mu.Lock()
@@ -103,15 +108,19 @@ func (jb *JitterBuffer) process() {
 		for len(jb.heap) == 0 {
 			if !jb.running {
 				jb.mu.Unlock()
+				log.Printf("JitterBuffer: process stopping (not running)")
 				return
 			}
+			log.Printf("JitterBuffer: waiting for packets...")
 			jb.cond.Wait()
+			log.Printf("JitterBuffer: woke up, heap size=%d", jb.heap.Len())
 		}
 
 		pkt := jb.heap[0]
 
 		// Skip old packets (delayed beyond buffer)
 		if pkt.Sequence < jb.seq {
+			log.Printf("JitterBuffer: skipping old packet %d (expected %d)", pkt.Sequence, jb.seq)
 			heap.Pop(&jb.heap)
 			jb.mu.Unlock()
 			continue
@@ -136,10 +145,12 @@ func (jb *JitterBuffer) process() {
 		jb.mu.Unlock()
 
 		// Send packet to sink
+		log.Printf("JitterBuffer: sending packet %d to sink", pkt.Sequence)
 		jb.sink.SendAudio(pkt.Samples)
 
 		// Timing: sleep based on sample count
 		if pkt.IsLast {
+			log.Printf("JitterBuffer: last packet received, stopping")
 			jb.mu.Lock()
 			jb.running = false
 			jb.mu.Unlock()
@@ -183,6 +194,7 @@ func (js *JitterSink) CloseAudio() {
 
 // SendAudio adds a packet to the jitter buffer.
 func (js *JitterSink) SendAudio(samples []int16) bool {
+	log.Printf("JitterSink: SendAudio called, samples=%d", len(samples))
 	js.jb.AddPacket(js.seq, samples, false)
 	js.seq++
 	return true
