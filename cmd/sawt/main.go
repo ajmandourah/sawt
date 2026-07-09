@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -39,6 +40,11 @@ func main() {
 
 	log.Printf("Sawt (صوت) starting...")
 	log.Printf("Server: %s | User: %s | Channel: %s", cfg.Server, cfg.Username, cfg.Channel)
+
+	// Ensure data directory exists
+	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+		log.Fatalf("Failed to create data directory: %v", err)
+	}
 
 	// Connect to Mumble
 	client, err := mumble.New(cfg)
@@ -80,7 +86,7 @@ func main() {
 
 	// ---- API Server ----
 	// Create the API store (scans music dir for tracks)
-	apiStore := store.New(cfg.MusicDir, cfg.YtDlpPath) // reuse ytdlp path as ffprobe fallback
+	apiStore := store.New(cfg.MusicDir, cfg.YtDlpPath, cfg.DataDir)
 
 	// Create and start the WebUI server
 	webuiSrv := api.New(api.Config{
@@ -104,6 +110,24 @@ func main() {
 	}()
 
 	log.Printf("Sawt is online and listening for commands (prefix: %s)", cfg.Prefix)
+
+	// Periodically save URLs
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				// Final save on shutdown
+				apiStore.SaveURLs(filepath.Join(cfg.DataDir, "urls.json"))
+				apiStore.SavePlaylists(filepath.Join(cfg.DataDir, "playlists.json"))
+				return
+			case <-ticker.C:
+				apiStore.SaveURLs(filepath.Join(cfg.DataDir, "urls.json"))
+				apiStore.SavePlaylists(filepath.Join(cfg.DataDir, "playlists.json"))
+			}
+		}
+	}()
 
 	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)

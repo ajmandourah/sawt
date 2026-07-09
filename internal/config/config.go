@@ -25,6 +25,9 @@ type Config struct {
 	// Audio
 	MusicDir string // directory to scan for local files
 
+	// Data
+	DataDir string // directory for persistence files (default: ./data)
+
 	// Commands
 	Prefix string // command prefix (default: "!")
 
@@ -47,6 +50,7 @@ func DefaultConfig() *Config {
 		Prefix:       "!",
 		YtDlpPath:    "yt-dlp",
 		MusicDir:     "./music",
+		DataDir:      "./data",
 		Stereo:       false,
 		JitterBuf:    false,
 		JitterDelay:  100,
@@ -67,6 +71,7 @@ func Load() (*Config, error) {
 	flagCert := flag.String("cert", "", "Path to TLS certificate")
 	flagKey := flag.String("key", "", "Path to TLS private key")
 	flagMusic := flag.String("music-dir", cfg.MusicDir, "Directory with local music files")
+	flagData := flag.String("data-dir", cfg.DataDir, "Directory for persistence files")
 	flagPrefix := flag.String("prefix", cfg.Prefix, "Command prefix character")
 	flagYtDlp := flag.String("ytdlp", cfg.YtDlpPath, "Path to yt-dlp binary")
 	flagStereo := flag.Bool("stereo", cfg.Stereo, "Enable stereo audio")
@@ -95,6 +100,7 @@ func Load() (*Config, error) {
 	cfg.TLSCert = *flagCert
 	cfg.TLSKey = *flagKey
 	cfg.MusicDir = *flagMusic
+	cfg.DataDir = *flagData
 	cfg.Prefix = *flagPrefix
 	cfg.YtDlpPath = *flagYtDlp
 	cfg.Stereo = *flagStereo
@@ -143,6 +149,8 @@ func loadYAML(cfg *Config, path string) error {
 			cfg.TLSKey = v
 		case "music-dir":
 			cfg.MusicDir = v
+		case "data-dir":
+			cfg.DataDir = v
 		case "prefix":
 			cfg.Prefix = v
 		case "ytdlp":

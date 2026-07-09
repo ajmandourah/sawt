@@ -478,16 +478,24 @@ func (s *Server) handleAddURL(w http.ResponseWriter, r *http.Request) {
 			Size:       "URL",
 			AddedAt:    time.Now().Format("2006-01-02"),
 			SourceType: resolved.Type,
+			URL:        req.URL,
+		}
+
+		// Try to extract thumbnail
+		if thumb, err := extractThumbnail(req.URL, s.probeCmd); err == nil {
+			track.Thumbnail = thumb
 		}
 
 		s.store.AddTrack(track)
+		s.store.SaveURLs(filepath.Join(s.store.DataDir(), "urls.json"))
 
 		writeOK(w, map[string]any{
 			"added": map[string]any{
-				"id":   track.ID,
-				"name": track.Name,
-				"url":  track.Path,
-				"type": track.SourceType,
+				"id":         track.ID,
+				"name":       track.Name,
+				"url":        track.Path,
+				"type":       track.SourceType,
+				"thumbnail":  track.Thumbnail,
 			},
 		})
 		return
@@ -504,6 +512,7 @@ func (s *Server) handleAddURL(w http.ResponseWriter, r *http.Request) {
 		Size:       "URL",
 		AddedAt:    time.Now().Format("2006-01-02"),
 		SourceType: source.SourceDirect,
+		URL:        req.URL,
 	}
 
 	if strings.Contains(strings.ToLower(req.URL), "youtube.com") || strings.Contains(strings.ToLower(req.URL), "youtu.be") {
@@ -518,6 +527,7 @@ func (s *Server) handleAddURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.store.AddTrack(track)
+	s.store.SaveURLs(filepath.Join(s.store.DataDir(), "urls.json"))
 
 	writeOK(w, map[string]any{
 		"added": map[string]any{
@@ -563,6 +573,7 @@ func (s *Server) handleCreatePlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := s.store.CreatePlaylist(req.Name, req.TrackIDs)
+	s.store.SavePlaylists(filepath.Join(s.store.DataDir(), "playlists.json"))
 	writeOK(w, p)
 }
 
@@ -577,6 +588,7 @@ func (s *Server) handleDeletePlaylist(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "playlist not found")
 		return
 	}
+	s.store.SavePlaylists(filepath.Join(s.store.DataDir(), "playlists.json"))
 	writeOK(w, map[string]any{"deleted": id})
 }
 
@@ -669,6 +681,29 @@ func probeDuration(path, probeCmd string) (string, int) {
 	var secs float64
 	fmt.Sscanf(result.Format.Duration, "%f", &secs)
 	return formatDuration(int(secs)), int(secs)
+}
+
+// extractThumbnail uses yt-dlp to extract the thumbnail URL for a given URL.
+func extractThumbnail(url, ytDlpPath string) (string, error) {
+	if ytDlpPath == "" {
+		return "", fmt.Errorf("yt-dlp path not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, ytDlpPath, "--print", "thumbnail", "--skip-download", url)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	thumb := strings.TrimSpace(string(out))
+	if thumb == "" {
+		return "", fmt.Errorf("no thumbnail found")
+	}
+
+	return thumb, nil
 }
 
 func formatDuration(totalSecs int) string {

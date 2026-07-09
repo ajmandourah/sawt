@@ -37,6 +37,8 @@ type TrackMeta struct {
 	Size       string            `json:"size"`     // human-readable "6.2 MB"
 	AddedAt    string            `json:"addedAt"`
 	SourceType source.SourceType `json:"sourceType"`
+	Thumbnail  string            `json:"thumbnail,omitempty"` // URL or local path to album art
+	URL        string            `json:"url,omitempty"`       // original URL for stream tracks
 }
 
 // Playlist is a saved collection of tracks.
@@ -56,17 +58,20 @@ type Store struct {
 	playlists   map[string]*Playlist  // id -> playlist
 	playlistSeq int                   // monotonic counter for ID generation
 	probeCmd    string                // path to ffprobe binary
+	dataDir     string                // directory for persistence files
 }
 
 // New creates a new Store, scanning the music directory for audio files.
-func New(musicDir, ffprobePath string) *Store {
+func New(musicDir, ffprobePath, dataDir string) *Store {
 	s := &Store{
 		musicDir:  musicDir,
 		tracks:    make(map[string]*TrackMeta),
 		playlists: make(map[string]*Playlist),
 		probeCmd:  ffprobePath,
+		dataDir:   dataDir,
 	}
 	s.scanDirectory()
+	s.loadURLs()
 	log.Printf("Store: loaded %d tracks from %s", len(s.tracks), musicDir)
 	return s
 }
@@ -355,6 +360,65 @@ func (s *Store) LoadPlaylists(path string) error {
 	}
 	log.Printf("Store: loaded %d playlists from %s", len(s.playlists), path)
 	return nil
+}
+
+// ---- URL Persistence ----
+
+// SaveURLs writes all URL tracks to a JSON file.
+func (s *Store) SaveURLs(path string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	// Filter only URL tracks
+	urlTracks := make([]*TrackMeta, 0)
+	for _, t := range s.tracks {
+		if t.SourceType == source.SourceYtDlp || t.SourceType == source.SourceDirect {
+			urlTracks = append(urlTracks, t)
+		}
+	}
+	data, err := json.MarshalIndent(urlTracks, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// LoadURLs reads URL tracks from a JSON file.
+func (s *Store) LoadURLs(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var urlTracks []*TrackMeta
+	if err := json.Unmarshal(data, &urlTracks); err != nil {
+		return err
+	}
+	for _, t := range urlTracks {
+		s.tracks[t.ID] = t
+		s.trackOrder = append(s.trackOrder, t.ID)
+	}
+	log.Printf("Store: loaded %d URLs from %s", len(urlTracks), path)
+	return nil
+}
+
+// loadURLs loads URL tracks from the data directory.
+func (s *Store) loadURLs() {
+	if s.dataDir == "" {
+		return
+	}
+	urlPath := filepath.Join(s.dataDir, "urls.json")
+	if err := s.LoadURLs(urlPath); err != nil {
+		log.Printf("Store: failed to load URLs: %v", err)
+	}
+}
+
+// DataDir returns the data directory for persistence files.
+func (s *Store) DataDir() string {
+	return s.dataDir
 }
 
 // ---- Helpers ----
