@@ -43,7 +43,7 @@ type Manager struct {
 	engine *audio.Engine
 
 	// Progress tracking
-	trackStartedAt time.Time // when the current track started playing
+	trackStartedAt time.Time     // when the current track started playing
 	trackDuration  time.Duration // total duration of the current track (if known)
 
 	// Callbacks

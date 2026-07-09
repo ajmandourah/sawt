@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ladis/sawt/internal/api/store"
 	"github.com/ladis/sawt/internal/audio"
 	"github.com/ladis/sawt/internal/queue"
 	"github.com/ladis/sawt/internal/source"
-	"github.com/ladis/sawt/internal/api/store"
 )
 
 // Server is the HTTP API server.
@@ -318,7 +318,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	// Limit file size to 100MB
 	r.Body = http.MaxBytesReader(w, r.Body, 100*1024*1024)
 
-	err := r.ParseMultipartForm(100*1024*1024)
+	err := r.ParseMultipartForm(100 * 1024 * 1024)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "parse form: "+err.Error())
 		return

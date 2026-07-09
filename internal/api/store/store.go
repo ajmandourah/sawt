@@ -29,22 +29,22 @@ var audioExts = map[string]bool{
 
 // TrackMeta is a lightweight representation of an audio file for the API.
 type TrackMeta struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Path      string    `json:"path"`
-	Duration  string    `json:"duration"` // human-readable "3:42"
-	Seconds   int       `json:"seconds"`  // total seconds for progress calculation
-	Size      string    `json:"size"`     // human-readable "6.2 MB"
-	AddedAt   string    `json:"addedAt"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Path       string            `json:"path"`
+	Duration   string            `json:"duration"` // human-readable "3:42"
+	Seconds    int               `json:"seconds"`  // total seconds for progress calculation
+	Size       string            `json:"size"`     // human-readable "6.2 MB"
+	AddedAt    string            `json:"addedAt"`
 	SourceType source.SourceType `json:"sourceType"`
 }
 
 // Playlist is a saved collection of tracks.
 type Playlist struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	TrackIDs  []string  `json:"trackIds"`
-	CreatedAt string    `json:"createdAt"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	TrackIDs  []string `json:"trackIds"`
+	CreatedAt string   `json:"createdAt"`
 }
 
 // Store holds all in-memory state for the API layer.
@@ -303,13 +303,13 @@ func (s *Store) SaveUpload(r io.Reader, filename string) (*TrackMeta, error) {
 	durStr, durSec := probeDuration(dest, s.probeCmd)
 
 	meta := &TrackMeta{
-		ID:        filepath.Base(dest),
-		Name:      filepath.Base(dest),
-		Path:      dest,
-		Duration:  durStr,
-		Seconds:   durSec,
-		Size:      formatSize(written),
-		AddedAt:   time.Now().Format("2006-01-02"),
+		ID:         filepath.Base(dest),
+		Name:       filepath.Base(dest),
+		Path:       dest,
+		Duration:   durStr,
+		Seconds:    durSec,
+		Size:       formatSize(written),
+		AddedAt:    time.Now().Format("2006-01-02"),
 		SourceType: source.SourceLocal,
 	}
 	s.AddTrack(meta)
