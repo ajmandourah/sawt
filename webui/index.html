@@ -259,59 +259,37 @@
   <!-- ===== JAVASCRIPT ===== -->
   <script>
   // ============================================================
-  //  MOCK API — Replace with real Sawt backend endpoints
+  //  REAL API — Connects to the Sawt bot HTTP server
   // ============================================================
-  const API = {
-    baseURL: '/api',
-    async fetch(path, opts = {}) {
-      // Mock mode: simulate network delay + return mock data
-      if (window.__mockMode !== false) {
-        await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(API.mockData[path] || {}) });
-      }
-      const res = await fetch(this.baseURL + path, opts);
-      return res;
-    },
-    // Mock data store
-    mockData: {
-      '/library': { tracks: MOCK_TRACKS },
-      '/queue': { nowPlaying: null, queue: [] },
-      '/playlists': { playlists: MOCK_PLAYLISTS },
-      '/upload': { uploaded: [] }
+  const API_BASE = '/api';
+
+  async function fetchAPI(path, opts = {}) {
+    const res = await fetch(API_BASE + path, {
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      ...opts
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
     }
-  };
+    return res.json();
+  }
 
-  // ============================================================
-  //  MOCK DATA — Seed data for the frontend
-  // ============================================================
-  const MOCK_TRACKS = [
-    { id: 't1', name: 'Ambient Sunrise.mp3', duration: '4:32', size: '6.2 MB', addedAt: '2026-07-01' },
-    { id: 't2', name: 'Lo-Fi Study Beats.wav', duration: '3:15', size: '33.1 MB', addedAt: '2026-07-02' },
-    { id: 't3', name: 'Jazz Cafe Background.ogg', duration: '5:48', size: '8.4 MB', addedAt: '2026-07-03' },
-    { id: 't4', name: 'Electronic Pulse.mp3', duration: '2:56', size: '4.1 MB', addedAt: '2026-07-04' },
-    { id: 't5', name: 'Rain Sounds (Relax).wav', duration: '12:00', size: '124 MB', addedAt: '2026-07-04' },
-    { id: 't6', name: 'Piano Melancholy.mp3', duration: '3:42', size: '5.3 MB', addedAt: '2026-07-05' },
-    { id: 't7', name: 'Synthwave Drive.ogg', duration: '4:15', size: '6.0 MB', addedAt: '2026-07-05' },
-    { id: 't8', name: 'Acoustic Guitar Loop.mp3', duration: '1:30', size: '2.1 MB', addedAt: '2026-07-06' },
-    { id: 't9', name: 'Deep House Mix 2026.wav', duration: '8:22', size: '85.3 MB', addedAt: '2026-07-06' },
-    { id: 't10', name: 'Classical Strings.ogg', duration: '6:10', size: '8.9 MB', addedAt: '2026-07-07' },
-    { id: 't11', name: 'Bass Drop.mp3', duration: '2:05', size: '2.9 MB', addedAt: '2026-07-07' },
-    { id: 't12', name: 'Nature Walk.mp3', duration: '7:33', size: '10.8 MB', addedAt: '2026-07-08' },
-  ];
+  async function postAPI(path, data = {}) {
+    return fetchAPI(path, { method: 'POST', body: JSON.stringify(data) });
+  }
 
-  const MOCK_PLAYLISTS = [
-    { id: 'p1', name: 'Chill Vibes', trackIds: ['t1', 't3', 't6'], createdAt: '2026-07-03' },
-    { id: 'p2', name: 'Workout Energy', trackIds: ['t4', 't7', 't11'], createdAt: '2026-07-05' },
-    { id: 'p3', name: 'Background Music', trackIds: ['t1', 't2', 't5', 't8'], createdAt: '2026-07-06' },
-  ];
+  async function deleteAPI(path) {
+    return fetchAPI(path, { method: 'DELETE' });
+  }
 
   // ============================================================
   //  STATE
   // ============================================================
-  let allTracks = [...MOCK_TRACKS];
-  let filteredTracks = [...MOCK_TRACKS];
+  let allTracks = [];
+  let filteredTracks = [];
   let queue = [];
-  let playlists = [...MOCK_PLAYLISTS];
+  let playlists = [];
   let nowPlaying = null;
   let isPlaying = false;
   let currentView = 'list';
@@ -319,6 +297,7 @@
   let progressInterval = null;
   let progressSeconds = 0;
   let totalSeconds = 0;
+  let refreshInterval = null;
 
   // ============================================================
   //  TAB SWITCHING
@@ -502,47 +481,72 @@
   //  ACTIONS
   // ============================================================
   async function playNow(trackId) {
-    const track = allTracks.find(t => t.id === trackId);
-    if (!track) return;
-    nowPlaying = { ...track };
-    isPlaying = true;
-    const dur = track.duration.split(':').map(Number);
-    totalSeconds = dur[0] * 60 + dur[1];
-    progressSeconds = 0;
-    updateNowPlaying();
-    startProgress();
-    switchTab('queue');
-    toast(`Now playing: ${track.name}`, 'info');
-  }
-
-  function togglePlay() {
-    if (!nowPlaying) return;
-    isPlaying = !isPlaying;
-    updateNowPlaying();
-    if (isPlaying) startProgress();
-    else stopProgress();
-  }
-
-  function skipForward() {
-    if (queue.length === 0) return;
-    const next = queue.shift();
-    playNow(next.id);
-  }
-
-  function skipBack() {
-    // In a real app, restart current track. For mock, skip to next.
-    if (nowPlaying && queue.length > 0) {
-      const next = queue.shift();
-      playNow(next.id);
+    try {
+      const res = await postAPI('/play', { id: trackId });
+      const track = allTracks.find(t => t.id === trackId);
+      if (!track) return;
+      nowPlaying = { ...track, id: trackId };
+      isPlaying = true;
+      totalSeconds = track.seconds || 0;
+      progressSeconds = 0;
+      updateNowPlaying();
+      startProgress();
+      switchTab('queue');
+      toast(`Now playing: ${track.name}`, 'info');
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
     }
   }
 
-  function addToQueue(trackId) {
-    const track = allTracks.find(t => t.id === trackId);
-    if (!track) return;
-    queue.push({ ...track });
-    renderQueue();
-    toast(`Added to queue: ${track.name}`, 'success');
+  async function togglePlay() {
+    if (!nowPlaying) return;
+    try {
+      if (isPlaying) {
+        await postAPI('/queue/pause');
+      } else {
+        await postAPI('/queue/resume');
+      }
+      isPlaying = !isPlaying;
+      updateNowPlaying();
+      if (isPlaying) startProgress();
+      else stopProgress();
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
+  }
+
+  async function skipForward() {
+    try {
+      await postAPI('/queue/skip');
+      // Refresh queue state from server
+      await loadQueue();
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
+  }
+
+  async function skipBack() {
+    try {
+      // Restart current track by playing it again
+      if (nowPlaying) {
+        await playNow(nowPlaying.id);
+      }
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
+  }
+
+  async function addToQueue(trackId) {
+    try {
+      await postAPI('/queue/add', { id: trackId });
+      const track = allTracks.find(t => t.id === trackId);
+      if (!track) return;
+      // Refresh queue from server
+      await loadQueue();
+      toast(`Added to queue: ${track.name}`, 'success');
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
   }
 
   function removeFromQueue(index) {
@@ -550,24 +554,31 @@
     renderQueue();
   }
 
-  function clearQueue() {
-    queue = [];
-    nowPlaying = null;
-    isPlaying = false;
-    stopProgress();
-    renderQueue();
-    updateNowPlaying();
-    toast('Queue cleared', 'info');
+  async function clearQueue() {
+    try {
+      await postAPI('/queue/clear');
+      queue = [];
+      nowPlaying = null;
+      isPlaying = false;
+      stopProgress();
+      renderQueue();
+      updateNowPlaying();
+      toast('Queue cleared', 'info');
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
   }
 
   async function loadPlaylist(playlistId) {
-    const pl = playlists.find(p => p.id === playlistId);
-    if (!pl) return;
-    const tracks = pl.trackIds.map(id => allTracks.find(t => t.id === id)).filter(Boolean);
-    queue = [...tracks];
-    renderQueue();
-    if (tracks.length > 0) playNow(tracks[0].id);
-    toast(`Loaded playlist: ${pl.name}`, 'success');
+    try {
+      await postAPI(`/playlists/${playlistId}/play`);
+      const pl = playlists.find(p => p.id === playlistId);
+      if (!pl) return;
+      await loadQueue();
+      toast(`Loaded playlist: ${pl.name}`, 'success');
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
   }
 
   function toggleSelect(trackId) {
@@ -622,10 +633,15 @@
     showNewPlaylistModal();
   }
 
-  function deletePlaylist(playlistId) {
-    playlists = playlists.filter(p => p.id !== playlistId);
-    renderPlaylists();
-    toast('Playlist deleted', 'info');
+  async function deletePlaylist(playlistId) {
+    try {
+      await deleteAPI(`/playlists/${playlistId}`);
+      playlists = playlists.filter(p => p.id !== playlistId);
+      renderPlaylists();
+      toast('Playlist deleted', 'info');
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
   }
 
   // ============================================================
@@ -647,12 +663,14 @@
     handleFiles(e.dataTransfer.files);
   }
 
-  function handleFiles(fileList) {
+  async function handleFiles(fileList) {
     const progressEl = document.getElementById('upload-progress');
     progressEl.classList.remove('hidden');
-    Array.from(fileList).forEach((file, i) => {
-      if (!/\.(mp3|wav|ogg)$/i.test(file.name)) return;
-      const id = 'upload-' + Date.now() + '-' + i;
+    
+    for (const file of fileList) {
+      if (!/\.(mp3|wav|ogg)$/i.test(file.name)) continue;
+      
+      const id = 'upload-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
       const html = `
         <div id="${id}" class="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/50 animate-fade-in">
           <div class="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
@@ -669,33 +687,50 @@
       `;
       progressEl.insertAdjacentHTML('beforeend', html);
 
-      // Simulate upload progress
-      let pct = 0;
-      const interval = setInterval(() => {
-        pct += Math.random() * 15;
-        if (pct >= 100) {
-          pct = 100;
-          clearInterval(interval);
-          document.getElementById(id + '-bar').style.width = '100%';
-          document.getElementById(id + '-pct').textContent = 'Done';
-          document.getElementById(id + '-pct').classList.add('text-brand-400');
-          // Add to library
-          const newTrack = {
-            id: 't' + Date.now(),
-            name: file.name,
-            duration: formatDuration(file.size * 0.001), // rough estimate
-            size: formatSize(file.size),
-            addedAt: new Date().toISOString().split('T')[0]
-          };
-          allTracks.push(newTrack);
-          renderLibrary();
-          toast(`Uploaded: ${file.name}`, 'success');
-        } else {
+      try {
+        // Simulate progress
+        let pct = 0;
+        const simInterval = setInterval(() => {
+          pct += Math.random() * 20;
+          if (pct >= 100) {
+            pct = 100;
+            clearInterval(simInterval);
+          }
           document.getElementById(id + '-bar').style.width = pct + '%';
           document.getElementById(id + '-pct').textContent = Math.round(pct) + '%';
+        }, 100);
+
+        // Real upload
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        clearInterval(simInterval);
+        document.getElementById(id + '-bar').style.width = '100%';
+        document.getElementById(id + '-pct').textContent = 'Done';
+        document.getElementById(id + '-pct').classList.add('text-brand-400');
+        
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+          throw new Error(err.error || 'Upload failed');
         }
-      }, 200);
-    });
+        
+        const result = await res.json();
+        toast(`Uploaded: ${file.name}`, 'success');
+        
+        // Refresh library
+        await loadLibrary();
+        
+      } catch (err) {
+        document.getElementById(id + '-pct').textContent = 'Error';
+        document.getElementById(id + '-pct').classList.add('text-red-400');
+        toast(`Upload error: ${err.message}`, 'error');
+      }
+    }
   }
 
   // ============================================================
@@ -780,18 +815,80 @@
   }
 
   // ============================================================
+  //  DATA LOADING
+  // ============================================================
+  async function loadLibrary() {
+    try {
+      const res = await fetchAPI('/library');
+      allTracks = res.data || [];
+      filterLibrary();
+    } catch (err) {
+      console.error('Failed to load library:', err);
+      toast('Failed to load library', 'error');
+    }
+  }
+
+  async function loadQueue() {
+    try {
+      const res = await fetchAPI('/queue');
+      const data = res.data;
+      queue = data.queue || [];
+      if (data.nowPlaying) {
+        nowPlaying = data.nowPlaying;
+        isPlaying = data.state === 'playing';
+        totalSeconds = data.nowPlaying.total || 0;
+        progressSeconds = data.nowPlaying.elapsed || 0;
+      } else {
+        nowPlaying = null;
+        isPlaying = false;
+        progressSeconds = 0;
+        totalSeconds = 0;
+      }
+      updateNowPlaying();
+      renderQueue();
+    } catch (err) {
+      console.error('Failed to load queue:', err);
+    }
+  }
+
+  async function loadPlaylists() {
+    try {
+      const res = await fetchAPI('/playlists');
+      playlists = res.data || [];
+      renderPlaylists();
+    } catch (err) {
+      console.error('Failed to load playlists:', err);
+    }
+  }
+
+  async function loadStatus() {
+    try {
+      const res = await fetchAPI('/status');
+      const data = res.data;
+      const status = document.getElementById('connection-status');
+      if (data.playing || data.paused) {
+        status.innerHTML = '<span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse-slow"></span><span class="text-brand-400">Connected — Mumble Server</span>';
+      } else {
+        status.innerHTML = '<span class="w-2 h-2 rounded-full bg-zinc-500"></span><span class="text-zinc-500">Idle</span>';
+      }
+    } catch (err) {
+      const status = document.getElementById('connection-status');
+      status.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span><span class="text-zinc-500">Disconnected</span>';
+    }
+  }
+
+  // ============================================================
   //  INIT
   // ============================================================
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     switchTab('library');
-    renderLibrary();
-    renderQueue();
-    renderPlaylists();
-    // Simulate connection status after a moment
-    setTimeout(() => {
-      const status = document.getElementById('connection-status');
-      status.innerHTML = '<span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse-slow"></span><span class="text-brand-400">Connected — Mumble Server</span>';
-    }, 1500);
+    await Promise.all([loadLibrary(), loadQueue(), loadPlaylists(), loadStatus()]);
+    
+    // Poll for queue updates every 2 seconds
+    refreshInterval = setInterval(async () => {
+      await loadQueue();
+      await loadStatus();
+    }, 2000);
   });
   </script>
 </body>
