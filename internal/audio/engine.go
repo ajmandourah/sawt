@@ -28,10 +28,6 @@ const (
 	// FrameChannelBuffer provides ~2.5s of decoupling between reader and sender.
 	// Increased to 128 to absorb network jitter.
 	FrameChannelBuffer = 128
-
-	// ReaderBufferSize is the internal buffer size for reading FFmpeg stdout.
-	// Larger buffers smooth out bursty reads from FFmpeg.
-	ReaderBufferSize = 64 * 1024
 )
 
 // Sink abstracts the audio output destination (Mumble client).
@@ -259,7 +255,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		defer close(pcmCh)
 		defer close(readerDone)
 
-		buf := make([]byte, ReaderBufferSize)
+		buf := make([]byte, BufioSize)
 		offset := 0
 
 		for {
@@ -283,11 +279,10 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 				// Convert s16le bytes to []int16
 				samples := bytesToInt16(buf[:e.bytesPerFrame])
 
-				// Non-blocking send - drop frame if channel is full
 				select {
 				case pcmCh <- samples:
-				default:
-					// Channel full - drop frame to avoid blocking FFmpeg
+				case <-e.stopCh:
+					return
 				}
 
 				// Shift remaining bytes to front of buffer
