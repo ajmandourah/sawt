@@ -277,9 +277,6 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 			n, err := reader.Read(buf[offset:])
 			offset += n
 			totalBytes += n
-			if n > 0 && totalBytes%500000 < e.bytesPerFrame {
-				log.Printf("Reader: read %d bytes (total=%d)", n, totalBytes)
-			}
 
 			// Extract complete frames from buffer
 			for offset >= e.bytesPerFrame {
@@ -317,24 +314,13 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 
 	// Playback loop: tick at 20ms, send frames
 	frameCount := 0
-	lastLog := time.Now()
 	for {
-		if time.Since(lastLog) >= 5*time.Second && frameCount > 0 {
-			fps := float64(frameCount) / time.Since(lastLog).Seconds()
-			log.Printf("Playback: %d frames in %.1fs (%.1f fps)", frameCount, time.Since(lastLog).Seconds(), fps)
-			lastLog = time.Now()
-		}
 		select {
 		case <-e.stopCh:
 			<-readerDone
 			log.Printf("Playback stopped after %d frames", frameCount)
 			return
 		case <-ticker.C:
-			if time.Since(lastLog) >= 5*time.Second && frameCount > 0 {
-						fps := float64(frameCount) / time.Since(lastLog).Seconds()
-						log.Printf("Playback: %d frames in %.1fs (%.1f fps)", frameCount, time.Since(lastLog).Seconds(), fps)
-						lastLog = time.Now()
-			}
 			select {
 			case pcm, ok := <-pcmCh:
 				if !ok {
