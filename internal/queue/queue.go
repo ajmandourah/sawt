@@ -262,7 +262,7 @@ func (m *Manager) startNext() {
 		}
 
 		log.Printf("Track finished: %s", currentTrack.Title)
-		
+
 		// Add to history
 		elapsed := time.Since(m.trackStartedAt)
 		m.history = append(m.history, &HistoryEntry{
@@ -277,7 +277,7 @@ func (m *Manager) startNext() {
 		if len(m.history) > 100 {
 			m.history = m.history[len(m.history)-100:]
 		}
-		
+
 		m.stopCurrent()
 		m.startNext()
 	}()

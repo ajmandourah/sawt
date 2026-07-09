@@ -91,7 +91,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("GET /api/library", s.handleListLibrary)
 	s.mux.HandleFunc("GET /api/library/search", s.handleSearchLibrary)
 	s.mux.HandleFunc("POST /api/library/url", s.handleAddURL)
-	
+
 	// History
 	s.mux.HandleFunc("GET /api/history", s.handleGetHistory)
 	s.mux.HandleFunc("POST /api/history/replay", s.handleReplayHistory)
@@ -465,9 +465,9 @@ func (s *Server) handleAddURL(w http.ResponseWriter, r *http.Request) {
 
 	writeOK(w, map[string]any{
 		"added": map[string]any{
-			"id": track.ID,
+			"id":   track.ID,
 			"name": track.Name,
-			"url": track.Path,
+			"url":  track.Path,
 			"type": track.SourceType,
 		},
 	})

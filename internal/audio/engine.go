@@ -259,21 +259,25 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 
 		buf := make([]byte, BufioSize)
 		offset := 0
+		totalBytes := 0
 
 		for {
 			select {
 			case <-e.stopCh:
+				log.Printf("Reader: stop requested, exiting")
 				return
 			default:
 			}
 
 			n, err := reader.Read(buf[offset:])
 			offset += n
+			totalBytes += n
 
 			// Extract complete frames from buffer
 			for offset >= e.bytesPerFrame {
 				select {
 				case <-e.stopCh:
+					log.Printf("Reader: stop requested in frame extraction")
 					return
 				default:
 				}
@@ -284,6 +288,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 				select {
 				case pcmCh <- samples:
 				case <-e.stopCh:
+					log.Printf("Reader: stop requested in channel send")
 					return
 				}
 
@@ -296,9 +301,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 			}
 
 			if err != nil {
-				if err != io.EOF {
-					log.Printf("FFmpeg read error: %v", err)
-				}
+				log.Printf("Reader: read error after %d bytes: %v", totalBytes, err)
 				return
 			}
 		}
