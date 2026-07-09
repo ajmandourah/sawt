@@ -96,7 +96,7 @@ func (jb *JitterBuffer) AddPacket(seq int64, samples []int16, isLast bool) {
 // process runs the jitter buffer processing loop.
 func (jb *JitterBuffer) process() {
 	log.Printf("JitterBuffer: process starting, delay=%v", jb.delay)
-
+	
 	// Initial delay to fill buffer
 	time.Sleep(jb.delay)
 	log.Printf("JitterBuffer: delay complete, heap size=%d", jb.heap.Len())
@@ -135,7 +135,6 @@ func (jb *JitterBuffer) process() {
 				jb.seq++
 			}
 			jb.mu.Unlock()
-			time.Sleep(time.Duration(jb.samplesPerFrame/(SampleRate/1000)) * time.Millisecond)
 			continue
 		}
 
@@ -144,11 +143,11 @@ func (jb *JitterBuffer) process() {
 		jb.seq++
 		jb.mu.Unlock()
 
-		// Send packet to sink
+		// Send packet to sink (no timing - engine handles timing)
 		log.Printf("JitterBuffer: sending packet %d to sink", pkt.Sequence)
 		jb.sink.SendAudio(pkt.Samples)
 
-		// Timing: sleep based on sample count
+		// Check if last packet
 		if pkt.IsLast {
 			log.Printf("JitterBuffer: last packet received, stopping")
 			jb.mu.Lock()
@@ -156,7 +155,6 @@ func (jb *JitterBuffer) process() {
 			jb.mu.Unlock()
 			return
 		}
-		time.Sleep(time.Duration(jb.samplesPerFrame/(SampleRate/1000)) * time.Millisecond)
 	}
 }
 
