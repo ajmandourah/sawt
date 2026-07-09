@@ -28,9 +28,8 @@ func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.SetOutput(os.Stderr)
 
-	// Register API port flag BEFORE config.Load() (which calls flag.Parse())
+	// Register API port flag before config.Load() (which calls flag.Parse())
 	apiPort := flag.Int("api-port", 7071, "Port for the HTTP API server")
-	flag.Parse()
 
 	cfg, err := config.Load()
 	if err != nil {
