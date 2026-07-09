@@ -38,28 +38,28 @@ func (h *JitterHeap) Pop() interface{} {
 
 // JitterBuffer smooths audio playback by buffering packets and handling loss.
 type JitterBuffer struct {
-	mu      sync.Mutex
-	heap    JitterHeap
-	seq     int64       // current expected sequence
-	delay   time.Duration
-	bufSize int         // max packets to buffer
-	running bool
-	silence []int16   // silence samples for loss concealment
-	sink    Sink      // underlying audio sink
-	samplesPerFrame int  // samples per frame for timing
+	mu              sync.Mutex
+	cond            *sync.Cond // signaled when new packets arrive
+	heap            JitterHeap
+	seq             int64 // current expected sequence
+	delay           time.Duration
+	running         bool
+	silence         []int16 // silence samples for loss concealment
+	sink            Sink    // underlying audio sink
+	samplesPerFrame int     // samples per frame for timing
 }
 
 // NewJitterBuffer creates a new jitter buffer.
-func NewJitterBuffer(sink Sink, delayMs, bufFrames, samplesPerFrame int) *JitterBuffer {
+func NewJitterBuffer(sink Sink, delayMs, samplesPerFrame int) *JitterBuffer {
 	jb := &JitterBuffer{
-		heap:    make(JitterHeap, 0),
-		seq:     -1,
-		delay:   time.Duration(delayMs) * time.Millisecond,
-		bufSize: bufFrames,
-		silence: make([]int16, samplesPerFrame),
-		sink:    sink,
+		heap:            make(JitterHeap, 0),
+		seq:             -1,
+		delay:           time.Duration(delayMs) * time.Millisecond,
+		silence:         make([]int16, samplesPerFrame),
+		sink:            sink,
 		samplesPerFrame: samplesPerFrame,
 	}
+	jb.cond = sync.NewCond(&jb.mu)
 	heap.Init(&jb.heap)
 	return jb
 }
@@ -81,11 +81,14 @@ func (jb *JitterBuffer) AddPacket(seq int64, samples []int16, isLast bool) {
 	// Start processing if not running
 	if !jb.running {
 		jb.running = true
-		if jb.seq == -1 || len(jb.heap) == 1 {
+		if jb.seq == -1 {
 			jb.seq = pkt.Sequence
 		}
 		go jb.process()
 	}
+
+	// Signal waiting goroutine
+	jb.cond.Signal()
 }
 
 // process runs the jitter buffer processing loop.
@@ -95,10 +98,14 @@ func (jb *JitterBuffer) process() {
 
 	for {
 		jb.mu.Lock()
-		if len(jb.heap) == 0 {
-			jb.mu.Unlock()
-			jb.running = false
-			return
+
+		// Wait for packets or shutdown
+		for len(jb.heap) == 0 {
+			if !jb.running {
+				jb.mu.Unlock()
+				return
+			}
+			jb.cond.Wait()
 		}
 
 		pkt := jb.heap[0]
@@ -133,7 +140,9 @@ func (jb *JitterBuffer) process() {
 
 		// Timing: sleep based on sample count
 		if pkt.IsLast {
+			jb.mu.Lock()
 			jb.running = false
+			jb.mu.Unlock()
 			return
 		}
 		time.Sleep(time.Duration(jb.samplesPerFrame/(SampleRate/1000)) * time.Millisecond)
@@ -153,7 +162,7 @@ func (jb *JitterBuffer) Flush() {
 
 // JitterSink wraps JitterBuffer to implement the Sink interface.
 type JitterSink struct {
-	jb *JitterBuffer
+	jb  *JitterBuffer
 	seq int64
 }
 
