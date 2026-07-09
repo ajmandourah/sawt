@@ -32,22 +32,22 @@ type Config struct {
 	YtDlpPath string // path to yt-dlp binary (default: "yt-dlp")
 
 	// Audio
-	Stereo    bool // enable stereo audio (requires Mumble 1.4.0+)
-	JitterBuf bool // enable jitter buffer for smoother playback
-	JitterDelay int // jitter buffer delay in ms (default: 100)
+	Stereo      bool // enable stereo audio (requires Mumble 1.4.0+)
+	JitterBuf   bool // enable jitter buffer for smoother playback
+	JitterDelay int  // jitter buffer delay in ms (default: 100)
 }
 
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		Server:    "127.0.0.1:64738",
-		Username:  "Sawt",
-		Channel:   "Music",
-		Prefix:    "!",
-		YtDlpPath: "yt-dlp",
-		MusicDir:  "./music",
-		Stereo:    false,
-		JitterBuf: false,
+		Server:      "127.0.0.1:64738",
+		Username:    "Sawt",
+		Channel:     "Music",
+		Prefix:      "!",
+		YtDlpPath:   "yt-dlp",
+		MusicDir:    "./music",
+		Stereo:      false,
+		JitterBuf:   false,
 		JitterDelay: 100,
 	}
 }
