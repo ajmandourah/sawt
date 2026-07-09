@@ -159,11 +159,11 @@ func (e *Engine) Start(source string) error {
 		log.Printf("yt-dlp downloaded %d bytes", info.Size())
 
 		// FFmpeg reads the downloaded audio file
-		cmd = exec.Command("ffmpeg", "-i", tmpPath,
+		cmd = exec.Command("ffmpeg", "-re", "-i", tmpPath,
 			"-f", "s16le", "-acodec", "pcm_s16le",
 			"-ar", fmt.Sprintf("%d", SampleRate),
 			"-ac", fmt.Sprintf("%d", e.channels),
-			"-loglevel", "error", "-y", "-")
+			"-loglevel", "error", "-y", "-") // -re reads at native frame rate
 		stdout, err = cmd.StdoutPipe()
 		if err != nil {
 			os.Remove(tmpPath)
@@ -249,7 +249,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 	defer ticker.Stop()
 
 	// Channel for passing frames from reader to sender
-	pcmCh := make(chan []int16, e.bufferFrames)
+	pcmCh := make(chan []int16, e.bufferFrames*4) // 4x buffer to handle bursts
 
 	// Reader goroutine: read raw bytes, convert to int16, push to channel
 	readerDone := make(chan struct{})
@@ -261,12 +261,17 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		offset := 0
 		totalBytes := 0
 
+		// Throttle reader to match playback rate (50Hz = 20ms per frame)
+		readerTicker := time.NewTicker(FrameDuration)
+		defer readerTicker.Stop()
+
 		for {
 			select {
 			case <-e.stopCh:
 				log.Printf("Reader: stop requested, exiting")
 				return
-			default:
+			case <-readerTicker.C:
+				// Throttled read
 			}
 
 			n, err := reader.Read(buf[offset:])
