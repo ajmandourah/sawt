@@ -65,7 +65,7 @@ type Engine struct {
 	channels        int
 	bytesPerFrame   int
 	samplesPerFrame int
-	bufferFrames    int  // configurable buffer size
+	bufferFrames    int // configurable buffer size
 }
 
 // New creates a new Engine ready to play.

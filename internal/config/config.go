@@ -41,12 +41,12 @@ type Config struct {
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		Server:    "127.0.0.1:64738",
-		Username:  "Sawt",
-		Channel:   "Music",
-		Prefix:    "!",
-		YtDlpPath: "yt-dlp",
-		MusicDir:  "./music",
+		Server:       "127.0.0.1:64738",
+		Username:     "Sawt",
+		Channel:      "Music",
+		Prefix:       "!",
+		YtDlpPath:    "yt-dlp",
+		MusicDir:     "./music",
 		Stereo:       false,
 		JitterBuf:    false,
 		JitterDelay:  100,
