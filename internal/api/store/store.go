@@ -343,11 +343,16 @@ func (s *Store) LoadPlaylists(path string) error {
 		}
 		return err
 	}
+	// Handle empty file
+	if len(data) == 0 {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var playlists map[string]*Playlist
 	if err := json.Unmarshal(data, &playlists); err != nil {
-		return err
+		log.Printf("Store: corrupt playlists file %s, resetting: %v", path, err)
+		return nil // Don't fail, just reset
 	}
 	s.playlists = playlists
 	// Update sequence counter
@@ -391,11 +396,16 @@ func (s *Store) LoadURLs(path string) error {
 		}
 		return err
 	}
+	// Handle empty file
+	if len(data) == 0 {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var urlTracks []*TrackMeta
 	if err := json.Unmarshal(data, &urlTracks); err != nil {
-		return err
+		log.Printf("Store: corrupt URLs file %s, resetting: %v", path, err)
+		return nil // Don't fail, just reset
 	}
 	for _, t := range urlTracks {
 		s.tracks[t.ID] = t

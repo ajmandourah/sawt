@@ -354,11 +354,16 @@ func (m *Manager) LoadHistory(path string) error {
 		}
 		return err
 	}
+	// Handle empty file
+	if len(data) == 0 {
+		return nil
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var history []*HistoryEntry
 	if err := json.Unmarshal(data, &history); err != nil {
-		return err
+		log.Printf("Queue: corrupt history file %s, resetting: %v", path, err)
+		return nil // Don't fail, just reset
 	}
 	m.history = history
 	log.Printf("Queue: loaded %d history entries from %s", len(m.history), path)
