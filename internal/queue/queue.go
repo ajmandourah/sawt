@@ -114,6 +114,32 @@ func (m *Manager) Enqueue(track *audio.Track) {
 	}
 }
 
+// PlayNow plays a track immediately without adding to queue.
+func (m *Manager) PlayNow(track *audio.Track) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.curr = track
+	m.trackStartedAt = time.Now()
+	m.trackDuration = 0
+
+	// Prefix yt-dlp sources
+	playSource := track.Source
+	if track.SourceType == source.SourceYtDlp {
+		playSource = "ytdlp:" + track.Source
+	}
+
+	if err := m.engine.Start(playSource); err != nil {
+		log.Printf("Failed to play track %q: %v", track.Title, err)
+		m.curr = nil
+		return
+	}
+
+	m.state = StatePlaying
+	m.emitStateChange()
+	m.emitTrackChange()
+}
+
 // Current returns the currently playing track.
 func (m *Manager) Current() *audio.Track {
 	m.mu.Lock()

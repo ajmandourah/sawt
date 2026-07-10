@@ -273,13 +273,13 @@ func (s *Server) handlePlayNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t := &audio.Track{
+	// Play now without adding to queue
+	s.qm.PlayNow(&audio.Track{
 		Title:       resolved.Title,
 		Source:      resolved.URL,
 		SourceType:  resolved.Type,
 		RequestedBy: "web-ui",
-	}
-	s.qm.Enqueue(t)
+	})
 
 	// Probe duration for progress tracking
 	if s.probeCmd != "" {
