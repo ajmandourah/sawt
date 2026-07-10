@@ -101,17 +101,28 @@ func (m *Manager) emitTrackChange() {
 	}
 }
 
-// Enqueue adds a track to the queue.
-// If nothing is playing, it starts playing immediately.
+// Enqueue adds a track to the queue without playing.
 func (m *Manager) Enqueue(track *audio.Track) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.items = append(m.items, track)
+}
 
-	if m.state == StateIdle {
-		m.startNext()
+// PlayQueue starts playing the queue from the beginning.
+func (m *Manager) PlayQueue() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(m.items) == 0 {
+		return
 	}
+
+	if m.state == StatePlaying {
+		return // already playing
+	}
+
+	m.startNext()
 }
 
 // PlayNow plays a track immediately without adding to queue.

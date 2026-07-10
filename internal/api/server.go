@@ -106,6 +106,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("GET /api/queue", s.handleGetQueue)
 	s.mux.HandleFunc("POST /api/play", s.handlePlayNow)
 	s.mux.HandleFunc("POST /api/queue/add", s.handleAddToQueue)
+	s.mux.HandleFunc("POST /api/queue/play", s.handlePlayQueue)
 	s.mux.HandleFunc("POST /api/queue/skip", s.handleSkip)
 	s.mux.HandleFunc("POST /api/queue/pause", s.handlePause)
 	s.mux.HandleFunc("POST /api/queue/resume", s.handleResume)
@@ -336,6 +337,11 @@ func (s *Server) handleAddToQueue(w http.ResponseWriter, r *http.Request) {
 	s.qm.Enqueue(t)
 
 	writeOK(w, map[string]any{"name": resolved.Title, "status": "enqueued"})
+}
+
+func (s *Server) handlePlayQueue(w http.ResponseWriter, r *http.Request) {
+	s.qm.PlayQueue()
+	writeOK(w, map[string]any{"status": "playing queue"})
 }
 
 func (s *Server) handleSkip(w http.ResponseWriter, r *http.Request) {
