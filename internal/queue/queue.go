@@ -2,7 +2,9 @@
 package queue
 
 import (
+	"encoding/json"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -34,7 +36,7 @@ func (s State) String() string {
 
 // Manager handles the playback queue and coordinates audio playback.
 type Manager struct {
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	state State
 	items []*audio.Track
 	curr  *audio.Track
@@ -330,6 +332,37 @@ func (m *Manager) GetHistory() []*HistoryEntry {
 	result := make([]*HistoryEntry, len(m.history))
 	copy(result, m.history)
 	return result
+}
+
+// SaveHistory writes the history to a JSON file.
+func (m *Manager) SaveHistory(path string) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	data, err := json.MarshalIndent(m.history, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// LoadHistory reads history from a JSON file.
+func (m *Manager) LoadHistory(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var history []*HistoryEntry
+	if err := json.Unmarshal(data, &history); err != nil {
+		return err
+	}
+	m.history = history
+	log.Printf("Queue: loaded %d history entries from %s", len(m.history), path)
+	return nil
 }
 
 // ReplayFromHistory replays a track from history by index.

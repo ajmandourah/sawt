@@ -57,6 +57,7 @@ func main() {
 
 	// Create queue manager
 	qm := queue.New(engine)
+	qm.LoadHistory(filepath.Join(cfg.DataDir, "history.json"))
 
 	// Create source resolver chain (order matters):
 	// 1. LocalResolver — files & directories
@@ -121,10 +122,12 @@ func main() {
 				// Final save on shutdown
 				apiStore.SaveURLs(filepath.Join(cfg.DataDir, "urls.json"))
 				apiStore.SavePlaylists(filepath.Join(cfg.DataDir, "playlists.json"))
+				qm.SaveHistory(filepath.Join(cfg.DataDir, "history.json"))
 				return
 			case <-ticker.C:
 				apiStore.SaveURLs(filepath.Join(cfg.DataDir, "urls.json"))
 				apiStore.SavePlaylists(filepath.Join(cfg.DataDir, "playlists.json"))
+				qm.SaveHistory(filepath.Join(cfg.DataDir, "history.json"))
 			}
 		}
 	}()
