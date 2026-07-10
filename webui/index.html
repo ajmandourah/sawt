@@ -624,22 +624,24 @@
     document.getElementById(id).classList.add('hidden');
   }
 
-  function savePlaylist() {
-    const name = document.getElementById('playlist-name-input').value.trim();
-    if (!name) return toast('Please enter a name', 'error');
+  async function savePlaylist() {
+    const name = prompt('Playlist name:');
+    if (!name || name.trim() === '') return;
     const tracks = [...selectedIds];
     if (tracks.length === 0) return toast('Select tracks first', 'error');
-    const pl = { id: 'p' + Date.now(), name, trackIds: tracks, createdAt: new Date().toISOString().split('T')[0] };
-    playlists.push(pl);
-    selectedIds.clear();
-    updateBulkBar();
-    renderPlaylists();
-    closeModal('modal-playlist');
-    toast(`Playlist "${name}" created`, 'success');
+    try {
+      await postAPI('/playlists', { name: name.trim(), trackIds: tracks });
+      selectedIds.clear();
+      updateBulkBar();
+      await loadPlaylists();
+      toast(`Playlist "${name}" created`, 'success');
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
   }
 
   function createPlaylistFromSelection() {
-    showNewPlaylistModal();
+    savePlaylist();
   }
 
   async function deletePlaylist(playlistId) {

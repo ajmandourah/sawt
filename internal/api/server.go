@@ -491,11 +491,11 @@ func (s *Server) handleAddURL(w http.ResponseWriter, r *http.Request) {
 
 		writeOK(w, map[string]any{
 			"added": map[string]any{
-				"id":         track.ID,
-				"name":       track.Name,
-				"url":        track.Path,
-				"type":       track.SourceType,
-				"thumbnail":  track.Thumbnail,
+				"id":        track.ID,
+				"name":      track.Name,
+				"url":       track.Path,
+				"type":      track.SourceType,
+				"thumbnail": track.Thumbnail,
 			},
 		})
 		return
