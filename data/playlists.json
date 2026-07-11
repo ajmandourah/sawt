@@ -1,0 +1,11 @@
+{
+  "p1": {
+    "id": "p1",
+    "name": "Test Playlist 3",
+    "trackIds": [
+      "soft-background-music-432715.mp3",
+      "test.wav"
+    ],
+    "createdAt": "2026-07-11"
+  }
+}

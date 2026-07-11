@@ -48,6 +48,9 @@ type Manager struct {
 	trackStartedAt time.Time     // when the current track started playing
 	trackDuration  time.Duration // total duration of the current track (if known)
 
+	// Pause state — saved track so Resume can restart it
+	pausedTrack *audio.Track
+
 	// History
 	history []*HistoryEntry // recently played tracks
 
@@ -110,6 +113,7 @@ func (m *Manager) Enqueue(track *audio.Track) {
 }
 
 // PlayQueue starts playing the queue from the beginning.
+// If something is already playing, it stops first.
 func (m *Manager) PlayQueue() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -119,7 +123,8 @@ func (m *Manager) PlayQueue() {
 	}
 
 	if m.state == StatePlaying {
-		return // already playing
+		log.Printf("Queue: stopping current track to play queue")
+		m.stopCurrent()
 	}
 
 	m.startNext()
@@ -129,6 +134,8 @@ func (m *Manager) PlayQueue() {
 func (m *Manager) PlayNow(track *audio.Track) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	m.stopCurrent()
 
 	m.curr = track
 	m.trackStartedAt = time.Now()
@@ -151,17 +158,62 @@ func (m *Manager) PlayNow(track *audio.Track) {
 	m.emitTrackChange()
 }
 
-// Current returns the currently playing track.
-func (m *Manager) Current() *audio.Track {
+// RestartCurrent stops and restarts the currently playing track from the beginning.
+func (m *Manager) RestartCurrent() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if m.curr == nil {
+		return
+	}
+
+	track := m.curr
+	m.stopCurrent()
+
+	m.curr = track
+	m.trackStartedAt = time.Now()
+	m.trackDuration = 0
+
+	// Prefix yt-dlp sources
+	playSource := track.Source
+	if track.SourceType == source.SourceYtDlp {
+		playSource = "ytdlp:" + track.Source
+	}
+
+	if err := m.engine.Start(playSource); err != nil {
+		log.Printf("Failed to restart track %q: %v", track.Title, err)
+		m.curr = nil
+		return
+	}
+
+	m.state = StatePlaying
+	m.emitStateChange()
+	m.emitTrackChange()
+}
+
+// RemoveAt removes the track at the given index from the queue.
+func (m *Manager) RemoveAt(index int) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index < 0 || index >= len(m.items) {
+		return false
+	}
+	m.items = append(m.items[:index], m.items[index+1:]...)
+	return true
+}
+
+// Current returns the currently playing track.
+func (m *Manager) Current() *audio.Track {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.curr
 }
 
 // Queue returns a copy of the queue items.
 func (m *Manager) Queue() []*audio.Track {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	result := make([]*audio.Track, len(m.items))
 	copy(result, m.items)
 	return result
@@ -169,15 +221,15 @@ func (m *Manager) Queue() []*audio.Track {
 
 // QueueLength returns the number of items in the queue.
 func (m *Manager) QueueLength() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return len(m.items)
 }
 
 // State returns the current playback state.
 func (m *Manager) State() State {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.state
 }
 
@@ -204,11 +256,12 @@ func (m *Manager) Stop() {
 
 	m.stopCurrent()
 	m.items = m.items[:0]
+	m.pausedTrack = nil
 	m.state = StateIdle
 	m.emitStateChange()
 }
 
-// Pause pauses playback.
+// Pause pauses playback by saving the current track and stopping the engine.
 func (m *Manager) Pause() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -217,14 +270,16 @@ func (m *Manager) Pause() {
 		return
 	}
 
-	// For now, pause = stop current and mark as paused
-	// True pause (FFmpeg -ss seek) comes later
+	// Save current track so Resume can restart it
+	m.pausedTrack = m.curr
+
+	// Stop the engine
 	m.stopCurrent()
 	m.state = StatePaused
 	m.emitStateChange()
 }
 
-// Resume resumes playback.
+// Resume resumes playback by restarting the saved track.
 func (m *Manager) Resume() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -233,10 +288,35 @@ func (m *Manager) Resume() {
 		return
 	}
 
-	if m.curr != nil {
-		// Re-start the current track
-		m.startNext()
+	if m.pausedTrack == nil {
+		m.state = StateIdle
+		m.emitStateChange()
+		return
 	}
+
+	// Restart the paused track
+	m.curr = m.pausedTrack
+	m.pausedTrack = nil
+	m.trackStartedAt = time.Now()
+	m.trackDuration = 0
+
+	// Prefix yt-dlp sources
+	playSource := m.curr.Source
+	if m.curr.SourceType == source.SourceYtDlp {
+		playSource = "ytdlp:" + m.curr.Source
+	}
+
+	if err := m.engine.Start(playSource); err != nil {
+		log.Printf("Failed to resume track %q: %v", m.curr.Title, err)
+		m.curr = nil
+		m.state = StateIdle
+		m.emitStateChange()
+		return
+	}
+
+	m.state = StatePlaying
+	m.emitStateChange()
+	m.emitTrackChange()
 }
 
 func (m *Manager) stopCurrent() {
@@ -334,8 +414,8 @@ func (m *Manager) Clear() {
 // GetProgress returns the current playback progress as (elapsed, total) duration.
 // elapsed is computed from when the track started; total is the known duration if set.
 func (m *Manager) GetProgress() (elapsed time.Duration, total time.Duration) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.state != StatePlaying || m.curr == nil {
 		return 0, 0
 	}
@@ -357,15 +437,15 @@ func (m *Manager) SetTrackDuration(d time.Duration) {
 
 // GetState returns the current playback state as a string.
 func (m *Manager) GetState() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.state.String()
 }
 
 // GetHistory returns the playback history.
 func (m *Manager) GetHistory() []*HistoryEntry {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	result := make([]*HistoryEntry, len(m.history))
 	copy(result, m.history)
 	return result
@@ -421,10 +501,7 @@ func (m *Manager) ReplayFromHistory(index int) bool {
 		SourceType:  hEntry.SourceType,
 		RequestedBy: hEntry.RequestedBy,
 	}
-	m.curr = nil
-	m.trackStartedAt = time.Time{}
-	m.trackDuration = 0
-	m.engine.Stop()
+	m.stopCurrent()
 	m.items = append([]*audio.Track{t}, m.items...)
 	m.startNext()
 	return true

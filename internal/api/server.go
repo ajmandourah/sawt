@@ -108,9 +108,11 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST /api/queue/add", s.handleAddToQueue)
 	s.mux.HandleFunc("POST /api/queue/play", s.handlePlayQueue)
 	s.mux.HandleFunc("POST /api/queue/skip", s.handleSkip)
+	s.mux.HandleFunc("POST /api/queue/restart", s.handleRestartCurrent)
 	s.mux.HandleFunc("POST /api/queue/pause", s.handlePause)
 	s.mux.HandleFunc("POST /api/queue/resume", s.handleResume)
 	s.mux.HandleFunc("POST /api/queue/clear", s.handleClearQueue)
+	s.mux.HandleFunc("POST /api/queue/remove", s.handleRemoveFromQueue)
 
 	// Upload
 	s.mux.HandleFunc("POST /api/upload", s.handleUpload)
@@ -207,7 +209,7 @@ func (s *Server) handleGetQueue(w http.ResponseWriter, r *http.Request) {
 	items := s.qm.Queue()
 	elapsed, total := s.qm.GetProgress()
 
-	nowPlaying := map[string]any{}
+	nowPlaying := map[string]any(nil)
 	if curr != nil {
 		nowPlaying = map[string]any{
 			"id":          curr.Source,
@@ -349,6 +351,26 @@ func (s *Server) handleSkip(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, map[string]any{"status": "skipped"})
 }
 
+func (s *Server) handleRestartCurrent(w http.ResponseWriter, r *http.Request) {
+	s.qm.RestartCurrent()
+	writeOK(w, map[string]any{"status": "restarted"})
+}
+
+func (s *Server) handleRemoveFromQueue(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Index int `json:"index"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !s.qm.RemoveAt(req.Index) {
+		writeError(w, http.StatusBadRequest, "invalid index")
+		return
+	}
+	writeOK(w, map[string]any{"status": "removed", "index": req.Index})
+}
+
 func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
 	s.qm.Pause()
 	writeOK(w, map[string]any{"status": "paused"})
@@ -426,7 +448,27 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetHistory(w http.ResponseWriter, r *http.Request) {
 	history := s.qm.GetHistory()
-	writeOK(w, history)
+	// Convert nanosecond durations to seconds for the frontend
+	type historyItem struct {
+		Title       string `json:"title"`
+		Source      string `json:"source"`
+		SourceType  string `json:"sourceType"`
+		RequestedBy string `json:"requestedBy"`
+		PlayedAt    string `json:"playedAt"`
+		Duration    int64  `json:"duration"` // seconds
+	}
+	result := make([]historyItem, len(history))
+	for i, h := range history {
+		result[i] = historyItem{
+			Title:       h.Title,
+			Source:      h.Source,
+			SourceType:  string(h.SourceType),
+			RequestedBy: h.RequestedBy,
+			PlayedAt:    h.PlayedAt.Format(time.RFC3339),
+			Duration:    int64(h.Duration.Seconds()),
+		}
+	}
+	writeOK(w, result)
 }
 
 func (s *Server) handleReplayHistory(w http.ResponseWriter, r *http.Request) {
@@ -617,11 +659,10 @@ func (s *Server) handlePlayPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Enqueue all tracks using source chain (same as Mumble chat)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
 	for _, t := range tracks {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		resolved, err := s.sourceChain.Resolve(ctx, t.Path)
+		cancel()
 		if err != nil {
 			log.Printf("Failed to resolve track %s: %v", t.Name, err)
 			continue
@@ -635,9 +676,14 @@ func (s *Server) handlePlayPlaylist(w http.ResponseWriter, r *http.Request) {
 		s.qm.Enqueue(track)
 	}
 
-	// Play the first track
+	// Start playing the queue
+	s.qm.PlayQueue()
+
+	// Probe duration of first track for progress tracking
 	first := tracks[0]
-	resolved, err := s.sourceChain.Resolve(ctx, first.Path)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 60*time.Second)
+	resolved, err := s.sourceChain.Resolve(ctx2, first.Path)
+	cancel2()
 	if err == nil && s.probeCmd != "" {
 		_, durSec := probeDuration(resolved.URL, s.probeCmd)
 		if durSec > 0 {
@@ -661,15 +707,11 @@ func isURL(s string) bool {
 
 // probeDuration uses ffprobe to get the duration of an audio file.
 // Returns (human-readable "3:42", seconds).
-func probeDuration(path, probeCmd string) (string, int) {
-	if probeCmd == "" {
-		return "0:00", 0
-	}
-
+func probeDuration(path, _ string) (string, int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, probeCmd, "-v", "quiet", "-show_entries", "format=duration", "-of", "json", path)
+	cmd := exec.CommandContext(ctx, "ffprobe", "-v", "quiet", "-show_entries", "format=duration", "-of", "json", path)
 	out, err := cmd.Output()
 	if err != nil {
 		return "0:00", 0

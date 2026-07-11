@@ -87,7 +87,10 @@ func main() {
 
 	// ---- API Server ----
 	// Create the API store (scans music dir for tracks)
-	apiStore := store.New(cfg.MusicDir, cfg.YtDlpPath, cfg.DataDir)
+	apiStore := store.New(cfg.MusicDir, "ffprobe", cfg.DataDir)
+	// Load persisted data
+	apiStore.LoadPlaylists(filepath.Join(cfg.DataDir, "playlists.json"))
+	apiStore.LoadURLs(filepath.Join(cfg.DataDir, "urls.json"))
 
 	// Create and start the WebUI server
 	webuiSrv := api.New(api.Config{

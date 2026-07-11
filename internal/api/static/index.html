@@ -439,7 +439,7 @@
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium truncate ${nowPlaying?.id === t.id ? 'text-brand-400' : 'text-zinc-200'}">${t.name}</p>
-          <p class="text-xs text-zinc-600">${t.duration}</p>
+          <p class="text-xs text-zinc-600">${t.sourceType || 'local'}${t.duration ? ' · ' + t.duration : ''}</p>
         </div>
         <button onclick="removeFromQueue(${i})" class="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-zinc-700 text-zinc-500 hover:text-red-400 transition-all duration-200" title="Remove">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -508,17 +508,23 @@
   }
 
   async function togglePlay() {
-    if (!nowPlaying) return;
     try {
       if (isPlaying) {
         await postAPI('/queue/pause');
+        isPlaying = false;
+        stopProgress();
+        updateNowPlaying();
+        return;
+      }
+      if (!nowPlaying) {
+        // Idle — play the queue
+        await postAPI('/queue/play', {});
       } else {
         await postAPI('/queue/resume');
       }
-      isPlaying = !isPlaying;
-      updateNowPlaying();
-      if (isPlaying) startProgress();
-      else stopProgress();
+      isPlaying = true;
+      startProgress();
+      await loadQueue();
     } catch (err) {
       toast(`Error: ${err.message}`, 'error');
     }
@@ -536,10 +542,11 @@
 
   async function skipBack() {
     try {
-      // Restart current track by playing it again
-      if (nowPlaying) {
-        await playNow(nowPlaying.id);
-      }
+      if (!nowPlaying) return;
+      await postAPI('/queue/restart', {});
+      progressSeconds = 0;
+      updateProgressUI();
+      startProgress();
     } catch (err) {
       toast(`Error: ${err.message}`, 'error');
     }
@@ -558,9 +565,13 @@
     }
   }
 
-  function removeFromQueue(index) {
-    queue.splice(index, 1);
-    renderQueue();
+  async function removeFromQueue(index) {
+    try {
+      await postAPI('/queue/remove', { index });
+      await loadQueue();
+    } catch (err) {
+      toast(`Error: ${err.message}`, 'error');
+    }
   }
 
   async function clearQueue() {
@@ -699,41 +710,37 @@
       progressEl.insertAdjacentHTML('beforeend', html);
 
       try {
-        // Simulate progress
-        let pct = 0;
-        const simInterval = setInterval(() => {
-          pct += Math.random() * 20;
-          if (pct >= 100) {
-            pct = 100;
-            clearInterval(simInterval);
-          }
-          document.getElementById(id + '-bar').style.width = pct + '%';
-          document.getElementById(id + '-pct').textContent = Math.round(pct) + '%';
-        }, 100);
+        const bar = document.getElementById(id + '-bar');
+        const pctEl = document.getElementById(id + '-pct');
 
-        // Real upload
         const formData = new FormData();
         formData.append('file', file);
-        
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
+
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/upload');
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const p = Math.round((e.loaded / e.total) * 100);
+              bar.style.width = p + '%';
+              pctEl.textContent = p + '%';
+            }
+          };
+          xhr.onload = () => {
+            if (xhr.status === 200) {
+              bar.style.width = '100%';
+              pctEl.textContent = 'Done';
+              pctEl.classList.add('text-brand-400');
+              resolve(JSON.parse(xhr.responseText));
+            } else {
+              reject(new Error('Upload failed (' + xhr.status + ')'));
+            }
+          };
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.send(formData);
         });
-        
-        clearInterval(simInterval);
-        document.getElementById(id + '-bar').style.width = '100%';
-        document.getElementById(id + '-pct').textContent = 'Done';
-        document.getElementById(id + '-pct').classList.add('text-brand-400');
-        
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Upload failed' }));
-          throw new Error(err.error || 'Upload failed');
-        }
-        
-        const result = await res.json();
+
         toast(`Uploaded: ${file.name}`, 'success');
-        
-        // Refresh library
         await loadLibrary();
         
       } catch (err) {
@@ -747,14 +754,6 @@
   // ============================================================
   //  HELPERS
   // ============================================================
-  function formatDuration(bytes) {
-    // Rough: ~1MB per minute for MP3
-    const mins = Math.round(bytes / 1024 / 1024 * 60 / 160);
-    const m = Math.floor(mins / 60);
-    const s = mins % 60;
-    return m + ':' + s.toString().padStart(2, '0');
-  }
-
   function formatSize(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
@@ -765,6 +764,13 @@
     const m = Math.floor(totalSecs / 60);
     const s = totalSecs % 60;
     return m + ':' + s.toString().padStart(2, '0');
+  }
+
+  function formatDuration(totalSecs) {
+    const secs = typeof totalSecs === 'number' ? Math.floor(totalSecs) : 0;
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
   function updateNowPlaying() {
@@ -795,19 +801,32 @@
     renderQueue();
   }
 
-  function startProgress() {
-    stopProgress();
-    if (totalSeconds <= 0) return; // Don't auto-skip tracks with unknown duration
-    progressInterval = setInterval(() => {
-      progressSeconds++;
-      if (progressSeconds >= totalSeconds) {
-        stopProgress();
-        skipForward();
-        return;
-      }
+  function updateProgressUI() {
+    if (totalSeconds > 0) {
       const pct = (progressSeconds / totalSeconds) * 100;
       document.getElementById('np-progress').style.width = pct + '%';
-      document.getElementById('np-time-current').textContent = formatTime(progressSeconds);
+    } else {
+      document.getElementById('np-progress').style.width = '0%';
+    }
+    document.getElementById('np-time-current').textContent = formatTime(progressSeconds);
+    document.getElementById('np-time-total').textContent = formatTime(totalSeconds);
+  }
+
+  function startProgress() {
+    stopProgress();
+    updateProgressUI();
+    progressInterval = setInterval(() => {
+      if (!isPlaying) return;
+      // Sync elapsed from server state on each poll; only increment locally for smooth UI
+      if (totalSeconds > 0) {
+        progressSeconds++;
+        if (progressSeconds >= totalSeconds) {
+          stopProgress();
+          skipForward();
+          return;
+        }
+      }
+      updateProgressUI();
     }, 1000);
   }
 
@@ -860,7 +879,8 @@
       const res = await fetchAPI('/queue');
       const data = res.data;
       queue = data.queue || [];
-      if (data.nowPlaying) {
+      // nowPlaying is null when idle (not {}), so check for name field
+      if (data.nowPlaying && data.nowPlaying.name) {
         nowPlaying = data.nowPlaying;
         isPlaying = data.state === 'playing';
         totalSeconds = data.nowPlaying.total || 0;
@@ -872,6 +892,7 @@
         totalSeconds = 0;
       }
       updateNowPlaying();
+      updateProgressUI();
       renderQueue();
     } catch (err) {
       console.error('Failed to load queue:', err);
@@ -951,12 +972,6 @@
     if (diffMin < 60) return `${diffMin}m ago`;
     if (diffHour < 24) return `${diffHour}h ago`;
     return `${diffDay}d ago`;
-  }
-
-  function formatDuration(totalSecs) {
-    const m = Math.floor(totalSecs / 60);
-    const s = totalSecs % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
   async function loadStatus() {
