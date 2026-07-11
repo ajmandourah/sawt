@@ -380,6 +380,13 @@ func (m *Manager) startNext() {
 			return
 		}
 
+		// Don't proceed if this track was skipped (replaced by a newer track).
+		// The old track's Done() fires after Skip(), but we should ignore it.
+		if m.curr != currentTrack {
+			log.Printf("Track %q was skipped, ignoring finish event", currentTrack.Title)
+			return
+		}
+
 		log.Printf("Track finished: %s", currentTrack.Title)
 
 		// Add to history

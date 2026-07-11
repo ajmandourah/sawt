@@ -42,27 +42,18 @@ type StereoEncoder struct {
 func (e *StereoEncoder) ID() int { return 4 }
 
 func (e *StereoEncoder) Encode(pcm []int16, frameSize, maxDataBytes int) ([]byte, error) {
-	// Log encoder calls for debugging
-	log.Printf("StereoEncoder.Encode: pcm=%d samples, frameSize=%d, maxDataBytes=%d", len(pcm), frameSize, maxDataBytes)
-
-	// gumble passes total samples as frameSize, but Opus expects samples per channel
-	// For stereo interleaved: frameSize should be len(pcm)/2
-	// Verify encoder is configured for 2 channels
 	if e.enc == nil {
-		log.Printf("StereoEncoder: encoder is nil!")
 		return nil, fmt.Errorf("encoder is nil")
 	}
 
+	// gumble passes total samples as frameSize, but Opus expects samples per channel
+	// For stereo interleaved: frameSize should be len(pcm)/2
 	correctedFrameSize := frameSize / 2
 	if correctedFrameSize <= 0 {
 		correctedFrameSize = 1
 	}
 
-	result, err := e.enc.Encode(pcm, correctedFrameSize, maxDataBytes)
-	if err != nil {
-		log.Printf("StereoEncoder.Encode error: %v", err)
-	}
-	return result, err
+	return e.enc.Encode(pcm, correctedFrameSize, maxDataBytes)
 }
 
 func (e *StereoEncoder) Reset() {

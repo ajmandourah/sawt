@@ -54,5 +54,53 @@
     "requestedBy": "web-ui",
     "playedAt": "2026-07-11T15:49:56.762234063+03:00",
     "duration": 3140615062
+  },
+  {
+    "title": "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)",
+    "source": "https://youtu.be/dQw4w9WgXcQ",
+    "sourceType": "ytdlp",
+    "requestedBy": "web-ui",
+    "playedAt": "2026-07-11T17:19:11.289195378+03:00",
+    "duration": 9223372036854775807
+  },
+  {
+    "title": "soft-background-music-432715.mp3",
+    "source": "/home/ladis/shared/sawt/music/soft-background-music-432715.mp3",
+    "sourceType": "local",
+    "requestedBy": "web-ui",
+    "playedAt": "2026-07-11T17:19:46.339454809+03:00",
+    "duration": 106983
+  },
+  {
+    "title": "test.wav",
+    "source": "/home/ladis/shared/sawt/music/test.wav",
+    "sourceType": "local",
+    "requestedBy": "web-ui",
+    "playedAt": "2026-07-11T17:19:46.340400916+03:00",
+    "duration": 18041
+  },
+  {
+    "title": "test.wav",
+    "source": "/home/ladis/shared/sawt/music/test.wav",
+    "sourceType": "local",
+    "requestedBy": "web-ui",
+    "playedAt": "2026-07-11T17:20:23.922898069+03:00",
+    "duration": 251122
+  },
+  {
+    "title": "test.wav",
+    "source": "/home/ladis/shared/sawt/music/test.wav",
+    "sourceType": "local",
+    "requestedBy": "web-ui",
+    "playedAt": "2026-07-11T19:01:35.411575925+03:00",
+    "duration": 3140674452
+  },
+  {
+    "title": "test_tone.wav",
+    "source": "/home/ladis/shared/sawt/music/test_tone.wav",
+    "sourceType": "local",
+    "requestedBy": "web-ui",
+    "playedAt": "2026-07-11T19:01:38.672715738+03:00",
+    "duration": 3260764762
   }
 ]
