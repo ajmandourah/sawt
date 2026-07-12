@@ -131,6 +131,14 @@ func main() {
 	// and Self.Session/channel tree are fully populated.
 	client.JoinChannel(cfg.Channel)
 
+	// Send welcome message to the channel.
+	welcomeMsg := fmt.Sprintf(
+		`<b><font color="#7cfc00">Sawt (صوت)</font></b> — Mumble Music Bot<br><br>
+I'm online and ready to play music! Use <b>%splay &lt;track&gt;</b> to start.<br><br>
+<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>`,
+		cfg.Prefix)
+	client.SendMessage(welcomeMsg)
+
 	// Periodically save URLs
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
@@ -176,7 +184,9 @@ func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manag
 <b>%spause</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Pause playback<br>
 <b>%sresume</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Resume playback<br>
 <b>%squeue</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Show current queue<br>
-<b>%snowplaying</b>&nbsp;&nbsp;Show current track`,
+<b>%snowplaying</b>&nbsp;&nbsp;Show current track<br>
+<br>
+<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>`,
 			cfg.Prefix, cfg.Prefix, cfg.Prefix, cfg.Prefix,
 			cfg.Prefix, cfg.Prefix, cfg.Prefix, cfg.Prefix, cfg.Prefix)
 	})
