@@ -1,7 +1,11 @@
 # ---- Build stage ----
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25 AS builder
 
-RUN apk add --no-cache gcc musl-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    libopus-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -13,6 +17,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
+ENV GOTOOLCHAIN=auto
 RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o /sawt ./cmd/sawt/
 
 # ---- Runtime stage ----
