@@ -1,5 +1,5 @@
 # ---- Build stage ----
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache gcc musl-dev
 
@@ -20,7 +20,7 @@ FROM alpine:3.19
 
 RUN apk add --no-cache \
     ffmpeg \
-    libopus \
+    opus \
     ca-certificates \
     tzdata \
     && rm -rf /var/cache/apk/*
