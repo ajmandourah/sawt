@@ -20,6 +20,9 @@ Thumbs.db
 *.swo
 *~
 
+# Pi agent
+.pi/
+
 # Logs
 *.log
 
