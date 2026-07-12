@@ -1,4 +1,53 @@
-sawt
+# Build artifacts
+/sawt
+/debug-mumble
+*.exe
+
+# Go
+/vendor/
+*.exe
+*.exe.lib
+*.test
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Data (persisted at runtime, not tracked)
+data/
+data/*
+!data/.gitkeep
+
+# Music (user-provided content)
 music/
-*.html
-.pi/
+music/*
+
+# Config with secrets
+config.yaml
+config.yml
+!config.yaml.example
+
+# Temporary files
+*.tmp
+*.tmp.*
+!*.tmp.*
+*.bak
+*.backup
+
+# Compiled objects
+*.o
+*.a
+*.so
+
+# Docker
+.docker/

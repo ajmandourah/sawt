@@ -45,7 +45,8 @@ sawt/
 │   │   ├── resolver.go          # SourceResolver interface + registry
 │   │   ├── direct.go            # Direct HTTP / file:// streams
 │   │   ├── local.go             # Local directory scanner
-│   │   └── ytdlp.go             # yt-dlp wrapper (URL → direct stream URL)
+│   │   ├── ytdlp.go             # yt-dlp wrapper (URL → direct stream URL)
+│   │   └── manager.go           # yt-dlp binary manager (download, update, daily refresh)
 │   └── command/
 │       └── handler.go           # Text command parser (!play, !skip, !stop, !queue, !help)
 ├── music/                       # Mount point for local files (gitignored)
@@ -66,7 +67,7 @@ sawt/
 | `internal/mumble` | gumble connection lifecycle, TLS cert loading, channel joining, text message dispatch |
 | `internal/audio` | FFmpeg process lifecycle, stdout reading, PCM frame slicing, Opus encoding |
 | `internal/queue` | Thread-safe queue management, playback state machine |
-| `internal/source` | Source resolution: turn any user input into a playable stream URL or file path |
+| `internal/source` | Source resolution: turn any user input into a playable stream URL or file path (includes yt-dlp binary auto-management) |
 | `internal/command` | Chat command parsing, help text, user-facing feedback |
 
 ### What Stays Flat
@@ -329,20 +330,23 @@ User Input → [IsLocalFile?] → [IsURL?] → [Try yt-dlp]
 - **Internet radio:** Works transparently — FFmpeg keeps the HTTP connection alive.
 - **Edge case:** Some URLs are web pages, not streams. We do NOT fetch and parse HTML. If FFmpeg cannot decode the stream, we surface the error to the user.
 
-#### C. yt-dlp Wrapper (`ytdlp.go`)
+#### C. yt-dlp Wrapper (`ytdlp.go` + `manager.go`)
 
-- **Detection:** Fallback for any URL that the direct resolver cannot handle, or explicit `!ytpl` command.
+- **Detection:** Fallback for any URL that the direct resolver cannot handle.
+- **Binary management:** The `Manager` type handles the yt-dlp binary lifecycle:
+  1. On startup, checks for `yt-dlp` in the data directory (`./data/yt-dlp`).
+  2. If missing or invalid, downloads the latest release from GitHub (supports Linux amd64/arm64, macOS amd64/arm64).
+  3. Runs `yt-dlp -U` daily (first check after 1 hour, then every 24h) to stay up to date.
 - **Mechanism:**
 
   ```
-  yt-dlp -g --no-playlist <url>
+  yt-dlp --print title --no-playlist --restrict-filenames --no-warnings <url>
   ```
 
-  - `-g` → output the direct video/audio URL
-  - `--no-playlist` → don't resolve entire playlists (user can use `!ytpl` for that)
-- **FFmpeg receives:** The direct URL output by yt-dlp (often a DASH or HLS fragment URL).
-- **Process model:** yt-dlp runs as a **short-lived child process** (resolve → get URL → exit). It does NOT stream audio. It only resolves the URL. FFmpeg then streams from the resolved URL.
-- **Caching consideration:** yt-dlp URLs can expire (especially YouTube DASH URLs). We resolve fresh for each track. No URL caching in MVP.
+  The resolver fetches the title, then returns the original URL. The audio engine pipes `yt-dlp → FFmpeg` for playback.
+- **FFmpeg receives:** The original URL. yt-dlp handles the download with proper headers internally, avoiding 403 errors from DASH URLs.
+- **Process model:** yt-dlp runs as a **short-lived child process** (resolve title → exit). For playback, yt-dlp downloads audio to a temp file → FFmpeg reads it → temp file is cleaned up.
+- **Caching consideration:** yt-dlp URLs can expire (especially YouTube DASH URLs). We resolve fresh for each track. No URL caching.
 
 ### 4.4 Resolution Error Handling
 
@@ -350,7 +354,7 @@ User Input → [IsLocalFile?] → [IsURL?] → [Try yt-dlp]
 |----------|----------|
 | File not found | Tell user "File not found: {path}" |
 | HTTP 404 / unreachable | Tell user "Cannot reach stream: {url}" |
-| yt-dlp not installed | Tell user "yt-dlp is not installed on this system" |
+| yt-dlp binary missing | Bot auto-downloads from GitHub on startup |
 | yt-dlp cannot resolve | Tell user "Could not resolve: {url} (yt-dlp failed)" |
 | Unsupported format | Tell user with FFmpeg's error message |
 
@@ -513,7 +517,7 @@ All errors are reported back to the user via Mumble text chat.
 | `gopkg.in/yaml.v3` | Config file parsing | Standard YAML support |
 | System: `ffmpeg` | Audio decoding | Industry-standard decoder |
 | System: `libopus` | Opus encoding (via CGO) | Mumble requires Opus |
-| System: `yt-dlp` | URL resolution (optional) | YouTube, SoundCloud, etc. |
+| System: `yt-dlp` | URL resolution (auto-managed) | YouTube, SoundCloud, etc. (downloaded from GitHub on first run) |
 
 **No other external Go dependencies.** Standard library for everything else (HTTP, exec, filepath, sync, time, log).
 

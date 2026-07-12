@@ -46,6 +46,10 @@ func main() {
 		log.Fatalf("Failed to create data directory: %v", err)
 	}
 
+	// Create context for cancellation.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Connect to Mumble
 	client, err := mumble.New(cfg)
 	if err != nil {
@@ -59,13 +63,23 @@ func main() {
 	qm := queue.New(engine)
 	qm.LoadHistory(filepath.Join(cfg.DataDir, "history.json"))
 
+	// Ensure yt-dlp binary is available (downloads from GitHub if missing).
+	ytDlpManager := source.NewManager(cfg.DataDir)
+	if err := ytDlpManager.EnsureAvailable(); err != nil {
+		log.Printf("WARNING: yt-dlp not available: %v — YouTube/SoundCloud playback disabled", err)
+	} else {
+		log.Printf("yt-dlp version: %s", ytDlpManager.Version())
+		// Start daily update check (first check after 1 hour, then every 24h).
+		ytDlpManager.RunDailyUpdate(ctx)
+	}
+
 	// Create source resolver chain (order matters):
 	// 1. LocalResolver — files & directories
 	// 2. YtDlpResolver — YouTube, SoundCloud, etc. (tried before DirectResolver)
 	// 3. DirectResolver — plain HTTP streams (fallback if yt-dlp can't resolve)
 	chain := source.NewChain(
 		&source.LocalResolver{},
-		source.NewYtDlpResolver(cfg.YtDlpPath),
+		source.NewYtDlpResolver(ytDlpManager),
 		&source.DirectResolver{},
 	)
 
@@ -100,12 +114,9 @@ func main() {
 		QueueMgr:    qm,
 		Engine:      engine,
 		MusicDir:    cfg.MusicDir,
-		ProbeCmd:    cfg.YtDlpPath, // reuse; ideally pass ffprobe path separately
+		ProbeCmd:    "ffprobe",
 		SourceChain: chain,
 	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	go func() {
 		if err := webuiSrv.Start(ctx); err != nil {

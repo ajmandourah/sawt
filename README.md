@@ -1,117 +1,251 @@
 # Sawt (صوت)
 
-Mumble music bot written in Go. The name means "sound" in Arabic.
+> A lightweight, self-hosted Mumble music bot written in Go.
 
-I made this because I was tired of the existing music bots being either too heavy (Java, Python with tons of dependencies) or not self-hosted friendly. This is one single binary that you can run on your own server and control everything.
+[![Go Version](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://golang.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-It connect to your Mumble server, join a channel, and play music from local files, YouTube, SoundCloud, or any direct audio URL. You control it through chat commands in Mumble or through the built-in web interface.
+Sawt connects to your Mumble server, joins a channel, and streams music from local files, direct URLs, YouTube, SoundCloud, or any HTTP audio stream. Control it through chat commands in Mumble or the built-in web interface.
+
+One binary. Zero bloat. Runs on a 512MB VPS.
+
+---
+
+## Features
+
+- **Multi-source playback** — local files, direct HTTP streams, YouTube, SoundCloud, Bandcamp, internet radio
+- **Web UI** — library browser, queue manager, playlist creation, file upload, playback history
+- **Chat commands** — `!play`, `!skip`, `!pause`, `!resume`, `!queue`, `!help` and more
+- **Stereo audio** — optional stereo Opus encoding (Mumble 1.4.0+)
+- **Jitter buffer** — configurable smoothing for network-heavy deployments
+- **Persistence** — playlists, URLs, and play history saved to disk
+- **yt-dlp auto-management** — binary auto-downloaded from GitHub, self-updates daily
+- **FFmpeg pipeline** — streaming audio decode with no temporary files on disk (except yt-dlp)
+
+---
 
 ## Requirements
 
-- Go 1.22 or higher
-- ffmpeg (system package, used for audio decoding)
-- ffprobe (usually comes with ffmpeg)
-- yt-dlp (optional, only if you want YouTube/SoundCloud support)
-- libopus development headers (for Opus encoding)
+| Dependency | Purpose | Required |
+|------------|---------|----------|
+| Go 1.22+ | Build the binary | Yes |
+| ffmpeg | Audio decoding & format conversion | Yes |
+| libopus-dev | Opus encoding (via CGO) | Yes |
+| ffprobe | Duration probing for library metadata | Recommended |
 
-On Ubuntu/Debian:
+> **Note:** yt-dlp is no longer a manual dependency. Sawt downloads it automatically from GitHub on first run and stores it in the data directory. It also self-updates daily.
 
+**Ubuntu/Debian:**
+
+```bash
+sudo apt install ffmpeg libopus-dev
 ```
-sudo apt install ffmpeg yt-dlp libopus-dev
+
+**Alpine:**
+
+```bash
+apk add ffmpeg libopus-dev
 ```
 
-## Build and Run
+---
 
-```
+## Quick Start
+
+### Build & Run
+
+```bash
 go build -o sawt ./cmd/sawt/
-./sawt -server your-mumble-server:64738 -pass yourpassword -user "Bot Name" -channel "Music" -music-dir ./music
+./sawt -server your-mumble-server:64738 -pass yourpassword -user "Sawt Bot" -channel "Music"
 ```
 
-The binary is about 12MB and it include the web UI embedded inside, so you dont need to serve any static files separately.
+The binary embeds the web UI, so no separate static file serving is needed.
 
-## Flags
+### Docker
+
+```bash
+docker build -t sawt .
+docker run -d --name sawt \
+  -v /path/to/music:/music:ro \
+  -v /path/to/data:/data \
+  -e SERVER=your-server:64738 \
+  -e USERNAME=SawtBot \
+  -e PASSWORD=yourpassword \
+  -e CHANNEL=Music \
+  sawt
+```
+
+See [Docker Configuration](#docker-configuration) for all environment variables.
+
+### Docker Compose
+
+```yaml
+# docker-compose.yml
+services:
+  sawt:
+    build: .
+    container_name: sawt
+    restart: unless-stopped
+    ports:
+      - "7071:7071"
+    volumes:
+      - ./music:/music:ro
+      - ./data:/data
+    environment:
+      - SERVER=your-server:64738
+      - USERNAME=SawtBot
+      - PASSWORD=yourpassword
+      - CHANNEL=Music
+```
+
+```bash
+docker compose up -d
+```
+
+---
+
+## Configuration
+
+### CLI Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| -server | (required) | Mumble server address with port |
-| -pass | (none) | Server password if required |
-| -user | "Sawt Bot" | Bot username |
-| -channel | "Music" | Channel to join on connect |
-| -music-dir | (none) | Directory containing your music files |
-| -prefix | "!" | Command prefix in chat |
-| -stereo | false | Enable stereo audio output |
-| -webui-port | 7071 | Port for the web interface |
-| -webui-addr | 0.0.0.0 | Bind address for web UI |
-| -data-dir | ./data | Where playlists and history are saved |
-| -ytdlp | yt-dlp | Path to yt-dlp binary |
-| -jitter-buf | 0 | Jitter buffer delay in milliseconds |
-| -jitter-delay | 0 | Additional jitter delay |
-| -buffer-frames | 100 | Audio buffer size in frames |
+| `-server` | (none) | Mumble server address (host:port) |
+| `-pass` | "" | Server password |
+| `-user` | "Sawt" | Bot username |
+| `-channel` | "Music" | Channel to join on connect |
+| `-cert` | "" | Path to TLS client certificate |
+| `-key` | "" | Path to TLS client private key |
+| `-music-dir` | "./music" | Directory to scan for local audio files |
+| `-data-dir` | "./data" | Directory for persistence (playlists, history, URLs) |
+| `-prefix` | "!" | Command prefix in Mumble chat |
+| `-stereo` | false | Enable stereo audio (requires Mumble 1.4.0+) |
+| `-jitter` | false | Enable jitter buffer for smoother playback |
+| `-jitter-delay` | 100 | Jitter buffer delay in milliseconds |
+| `-buffer` | 128 | Audio buffer size in frames |
+| `-config` | "" | Path to YAML config file (flags override file values) |
+| `-webui-port` | 7071 | Port for the web interface |
+| `-webui-addr` | "0.0.0.0" | Bind address for web UI |
 
-## Commands
+### YAML Config File
 
-All commands use the prefix (default is `!`):
-
-- `!play <track>` - Play a track from your music directory or a URL
-- `!stop` - Stop playback and clear the queue
-- `!skip` - Skip to the next track in queue
-- `!pause` - Pause current playback
-- `!resume` - Resume from where you paused
-- `!queue` - Show the current queue
-- `!nowplaying` - Show what is currently playing
-- `!help` - Show available commands
-
-When you use `!play` with a URL, it will check if it is a YouTube or SoundCloud link and use yt-dlp to extract the audio. If it is a direct link to an audio file, it will play it directly. For local files, it search in the music directory you specified.
-
-## Web Interface
-
-The bot come with a built-in web UI that you can access on port 7071 (or whatever you set with -webui-port). It have the following features:
-
-- Library tab - see all your tracks, search, add URLs, and select multiple tracks
-- Queue tab - see what is playing, control playback, manage the queue
-- Playlists tab - create and manage playlists from your library
-- History tab - see playback history and replay old tracks
-- Upload tab - upload audio files directly to your music directory
-
-The web UI use the same playback engine as the chat commands, so the behavior is consistent. When you press play from the web, it go through the same source resolution chain.
-
-## Audio Pipeline
-
-The audio flow is pretty simple: source -> ffmpeg -> PCM bytes -> Opus encode -> Mumble.
-
-For local files and direct URLs, ffmpeg read the file directly and output raw PCM. For YouTube and SoundCloud, yt-dlp first extract the direct audio URL and then ffmpeg process it. Everything is streamed through pipes, so there is no temporary video files being downloaded to disk (except for yt-dlp which download audio to a temp file and delete it after).
-
-The PCM output from ffmpeg is read at 50Hz (20ms frames) which match the Mumble audio frame rate. This prevent buffer overflow and keep the playback smooth.
-
-## Configuration File
-
-Instead of using flags every time, you can create a config.yaml file:
+Create a `config.yaml` (or any path with `-config`):
 
 ```yaml
-server: "your-server:64738"
+server: "127.0.0.1:64738"
 username: "Sawt Bot"
 password: "yourpassword"
 channel: "Music"
-musicDir: "./music"
+music-dir: "./music"
+data-dir: "./data"
 prefix: "!"
 stereo: false
-webuiPort: 7071
-ytdlpPath: "yt-dlp"
+jitter: false
+jitter-delay: 100
+buffer: 128
+tls-cert: "/path/to/cert.pem"
+tls-key: "/path/to/key.pem"
 ```
 
-Then just run `./sawt` and it will load the config automatically. Command line flags still override the config file values.
+CLI flags always take precedence over file values.
+
+---
+
+## Chat Commands
+
+All commands use the configured prefix (default `!`):
+
+| Command | Description |
+|---------|-------------|
+| `!help` | Show available commands |
+| `!ping` | Check if bot is alive |
+| `!play <track>` | Play a file, URL, or directory |
+| `!stop` | Stop playback and clear the queue |
+| `!skip` | Skip to the next track |
+| `!pause` | Pause current playback |
+| `!resume` | Resume from where you paused |
+| `!queue` | Show the current queue |
+| `!nowplaying` | Show what is currently playing |
+
+**`!play` accepts:**
+
+- Local file paths (e.g. `!play /music/song.mp3`)
+- Direct HTTP URLs (e.g. `!play https://example.com/stream.mp3`)
+- YouTube/SoundCloud/Bandcamp URLs (resolved via yt-dlp)
+- Directory paths (enqueues all audio files recursively)
+
+---
+
+## Web Interface
+
+Access the web UI at `http://<server-ip>:7071`. Features:
+
+- **Library** — browse all local tracks, search, add URLs, bulk-select for playlists
+- **Queue** — now-playing card with progress bar, play/pause/skip controls, queue management
+- **Playlists** — create, play, and delete playlists
+- **History** — view recently played tracks and replay them
+- **Upload** — drag-and-drop or browse to upload audio files (MP3, WAV, OGG, FLAC, M4A, etc.)
+
+The web UI shares the same playback engine as chat commands.
+
+---
+
+## Audio Pipeline
+
+```
+Source → FFmpeg → PCM (s16le, 48kHz) → Opus Encode → Mumble
+```
+
+- FFmpeg decodes any format to raw 16-bit signed PCM at 48kHz
+- Audio is streamed through pipes — no temporary files for local/HTTP sources
+- Stereo mode outputs 3,840 bytes per 20ms frame; mono outputs 1,920
+- yt-dlp sources: yt-dlp downloads to a temp file → FFmpeg reads it → temp file is cleaned up
+- Jitter buffer (optional): smooths out network jitter with configurable delay
+
+---
 
 ## Data Persistence
 
-Playlists, added URLs, and play history are saved in the data directory (default is `./data`). The files are saved automatically every minute and also when you stop the bot. If the JSON files get corrupted somehow, the bot will reset them instead of crashing.
+Files are stored in the data directory (default `./data`):
 
-## Notes
+| File | Contents |
+|------|----------|
+| `playlists.json` | Saved playlists with track references |
+| `urls.json` | Added URLs and stream tracks |
+| `history.json` | Playback history (last 100 entries) |
 
-The bot is designed to be lightweight and run on small servers. I tested it on a VPS with 512MB RAM and it work fine. The memory usage is pretty stable because we stream everything and dont load full files into memory.
+Files are saved every minute and on graceful shutdown. Corrupt files are reset automatically.
 
-If you have any issue with audio quality, try adjusting the jitter buffer settings. The default is disabled which give the lowest latency but might have some stutter on slow connections.
+---
 
-For the stereo mode, you need to make sure your Mumble server support it and enable it with the -stereo flag. The bot will encode in stereo which use more bandwidth but sound better for music.
+## Architecture
+
+```
+cmd/sawt/          — Entry point, wires everything together
+internal/config/   — CLI flags + YAML config loading
+internal/mumble/   — gumble connection, auth, TLS, text dispatch
+internal/audio/    — FFmpeg pipeline, PCM framing, Opus encoding, jitter buffer
+internal/queue/    — Playback queue, state machine, history
+internal/source/   — Source resolution chain (local, direct, yt-dlp)
+internal/command/  — Chat command parser and dispatcher
+internal/api/      — HTTP REST API + embedded web UI
+```
+
+The full architectural blueprint is in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+---
+
+## Debug Tool
+
+A companion binary for testing Mumble connectivity without the full bot:
+
+```bash
+go build -o debug-mumble ./cmd/debug-mumble/
+./debug-mumble -server your-server:64738 -user "Debug" -pass yourpassword
+```
+
+Connects to Mumble, joins a channel, and prints all received text messages. Useful for verifying server connectivity, TLS, and permissions.
+
+---
 
 ## License
 

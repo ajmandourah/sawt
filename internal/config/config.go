@@ -31,9 +31,6 @@ type Config struct {
 	// Commands
 	Prefix string // command prefix (default: "!")
 
-	// yt-dlp
-	YtDlpPath string // path to yt-dlp binary (default: "yt-dlp")
-
 	// Audio
 	Stereo       bool // enable stereo audio (requires Mumble 1.4.0+)
 	JitterBuf    bool // enable jitter buffer for smoother playback
@@ -48,7 +45,6 @@ func DefaultConfig() *Config {
 		Username:     "Sawt",
 		Channel:      "Music",
 		Prefix:       "!",
-		YtDlpPath:    "yt-dlp",
 		MusicDir:     "./music",
 		DataDir:      "./data",
 		Stereo:       false,
@@ -73,7 +69,6 @@ func Load() (*Config, error) {
 	flagMusic := flag.String("music-dir", cfg.MusicDir, "Directory with local music files")
 	flagData := flag.String("data-dir", cfg.DataDir, "Directory for persistence files")
 	flagPrefix := flag.String("prefix", cfg.Prefix, "Command prefix character")
-	flagYtDlp := flag.String("ytdlp", cfg.YtDlpPath, "Path to yt-dlp binary")
 	flagStereo := flag.Bool("stereo", cfg.Stereo, "Enable stereo audio")
 	flagJitter := flag.Bool("jitter", cfg.JitterBuf, "Enable jitter buffer")
 	flagJitterDelay := flag.Int("jitter-delay", cfg.JitterDelay, "Jitter buffer delay in ms")
@@ -102,7 +97,6 @@ func Load() (*Config, error) {
 	cfg.MusicDir = *flagMusic
 	cfg.DataDir = *flagData
 	cfg.Prefix = *flagPrefix
-	cfg.YtDlpPath = *flagYtDlp
 	cfg.Stereo = *flagStereo
 	cfg.JitterBuf = *flagJitter
 	cfg.JitterDelay = *flagJitterDelay
@@ -153,8 +147,6 @@ func loadYAML(cfg *Config, path string) error {
 			cfg.DataDir = v
 		case "prefix":
 			cfg.Prefix = v
-		case "ytdlp":
-			cfg.YtDlpPath = v
 		case "stereo":
 			cfg.Stereo = v == "true"
 		case "jitter":
