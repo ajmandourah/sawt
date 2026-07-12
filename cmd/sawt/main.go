@@ -115,6 +115,11 @@ func main() {
 
 	log.Printf("Sawt is online and listening for commands (prefix: %s)", cfg.Prefix)
 
+	// --- Join the target channel as the VERY LAST step ---
+	// All initialization is complete, the readRoutine has drained its buffer,
+	// and Self.Session/channel tree are fully populated.
+	client.JoinChannel(cfg.Channel)
+
 	// Periodically save URLs
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)

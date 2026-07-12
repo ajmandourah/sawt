@@ -23,12 +23,12 @@ type TextHandler func(user *gumble.User, message string)
 
 // Client wraps a gumble connection with reconnection logic and message dispatch.
 type Client struct {
-	cfg     *config.Config
-	client  *gumble.Client
-	handler TextHandler
-	ready   chan struct{} // closed when connected and ready
-	mu      sync.Mutex
-	stopped bool
+	cfg       *config.Config
+	client    *gumble.Client
+	handler   TextHandler
+	connected chan struct{} // closed when the Mumble connection is established
+	mu        sync.Mutex
+	stopped   bool
 
 	// Audio output channel (one per playback session)
 	audioCh chan<- gumble.AudioBuffer
@@ -61,21 +61,22 @@ func (e *StereoEncoder) Reset() {
 }
 
 // New creates a new Mumble client and connects to the server.
+// Does NOT join any channel — call JoinChannel() after full initialization.
 func New(cfg *config.Config) (*Client, error) {
 	c := &Client{
-		cfg:   cfg,
-		ready: make(chan struct{}),
+		cfg:       cfg,
+		connected: make(chan struct{}),
 	}
 
 	if err := c.connect(); err != nil {
 		return nil, fmt.Errorf("mumble connect: %w", err)
 	}
 
-	// Wait for ready signal
+	// Wait for connection only (no channel join yet)
 	select {
-	case <-c.ready:
+	case <-c.connected:
 	case <-time.After(15 * time.Second):
-		return nil, fmt.Errorf("mumble connect: timed out waiting for ready")
+		return nil, fmt.Errorf("mumble connect: timed out waiting for connection")
 	}
 
 	log.Printf("Connected to Mumble: %s as %s", cfg.Server, cfg.Username)
@@ -83,6 +84,11 @@ func New(cfg *config.Config) (*Client, error) {
 }
 
 func (c *Client) connect() error {
+	// Reset signaling channel for each connect attempt (handles reconnects).
+	c.mu.Lock()
+	c.connected = make(chan struct{})
+	c.mu.Unlock()
+
 	gConfig := gumble.NewConfig()
 	gConfig.Username = c.cfg.Username
 	gConfig.Password = c.cfg.Password
@@ -107,30 +113,27 @@ func (c *Client) connect() error {
 	// Attach our event listener
 	gConfig.Attach(gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
-			log.Printf("Mumble connected, joining channel: %s", c.cfg.Channel)
+			log.Printf("Mumble connected")
 
 			// Re-apply stereo encoder (codec config may have overwritten it)
-			// Use e.Client (gumble Client from event) instead of c.client (may be nil during handshake)
 			if c.cfg.Stereo {
 				if stereoEnc == nil {
 					log.Printf("ERROR: stereoEnc is nil!")
 				} else if stereoEnc.enc == nil {
 					log.Printf("ERROR: stereoEnc.enc is nil (encoder creation failed)!")
-				} else if e.Client == nil {
-					log.Printf("ERROR: e.Client is nil!")
 				} else {
 					e.Client.AudioEncoder = stereoEnc
 					log.Printf("Re-applied stereo encoder after connect")
 				}
 			}
 
-			c.joinChannel(c.cfg.Channel)
+			// Signal that the basic connection is established.
+			// Channel join is deferred to JoinChannel() after full initialization.
 			c.mu.Lock()
 			select {
-			case <-c.ready:
-				// already closed
+			case <-c.connected:
 			default:
-				close(c.ready)
+				close(c.connected)
 			}
 			c.mu.Unlock()
 		},
@@ -183,6 +186,8 @@ func (c *Client) reconnect() {
 		err := c.connect()
 		if err == nil {
 			log.Printf("Reconnected to Mumble")
+			// Rejoin the configured channel after reconnect.
+			c.JoinChannel(c.cfg.Channel)
 			return
 		}
 
@@ -215,55 +220,52 @@ func (c *Client) handleTextMessage(e *gumble.TextMessageEvent) {
 	}
 }
 
-func (c *Client) joinChannel(name string) {
-	if c.client == nil {
+// JoinChannel moves the bot to the named channel.
+// Call this AFTER all initialization is complete (after "Sawt is online").
+// Blocks until the server confirms the move, or the channel doesn't exist.
+func (c *Client) JoinChannel(name string) {
+	c.mu.Lock()
+	client := c.client
+	c.mu.Unlock()
+
+	if client == nil {
+		log.Printf("JoinChannel: client is nil")
 		return
 	}
 
-	// Search for existing channel
-	ch := findChannelByName(c.client.Channels, name)
+	log.Printf("Joining channel: %q", name)
+	log.Printf("Self: session=%d name=%q channel=%q", client.Self.Session, client.Self.Name, client.Self.Channel.Name)
+
+	ch := client.Channels.Find(name)
 	if ch == nil {
-		// Find root channel to create child
-		root := findRootChannel(c.client.Channels)
-		if root == nil {
-			log.Printf("Failed to find root channel")
-			return
-		}
-		// Create it
-		root.Add(name, false)
-		// Wait briefly for the channel to be created
-		time.Sleep(500 * time.Millisecond)
-		ch = findChannelByName(c.client.Channels, name)
-		if ch == nil {
-			log.Printf("Failed to create/find channel: %s", name)
-			return
-		}
-		log.Printf("Created channel: %s", name)
+		log.Printf("Channel %q not found — staying in %s (ID=%d)", name, client.Self.Channel.Name, client.Self.Channel.ID)
+		return
 	}
 
-	// Move self to channel
-	c.client.Self.Move(ch)
-	log.Printf("Joined channel: %s", name)
-}
+	// Use a channel to wait for the server's UserState confirmation.
+	done := make(chan struct{}, 1)
 
-// findChannelByName searches all channels for one with the given name.
-func findChannelByName(channels gumble.Channels, name string) *gumble.Channel {
-	for _, ch := range channels {
-		if ch.Name == name {
-			return ch
-		}
-	}
-	return nil
-}
+	// Attach a one-shot listener for the confirmation.
+	client.Config.Attach(gumbleutil.Listener{
+		UserChange: func(e *gumble.UserChangeEvent) {
+			if e.User != nil && e.User.Session == client.Self.Session && e.Type.Has(gumble.UserChangeChannel) {
+				select {
+				case done <- struct{}{}:
+				default:
+				}
+			}
+		},
+	})
 
-// findRootChannel returns the server's root channel (no parent).
-func findRootChannel(channels gumble.Channels) *gumble.Channel {
-	for _, ch := range channels {
-		if ch.IsRoot() {
-			return ch
-		}
+	client.Self.Move(ch)
+	log.Printf("Sent Move to %s (ID=%d), waiting for server confirmation", ch.Name, ch.ID)
+
+	select {
+	case <-done:
+		log.Printf("Joined channel: %s (ID=%d)", ch.Name, ch.ID)
+	case <-time.After(5 * time.Second):
+		log.Printf("Timeout waiting for channel join confirmation to %s", name)
 	}
-	return nil
 }
 
 // SetTextHandler registers the function called for incoming text messages.
