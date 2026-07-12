@@ -66,6 +66,9 @@ type Engine struct {
 	bytesPerFrame   int
 	samplesPerFrame int
 	bufferFrames    int // configurable buffer size
+
+	// Volume controller (applied to sink before sending to Mumble)
+	volumeCtrl *VolumeController
 }
 
 // New creates a new Engine ready to play.
@@ -81,6 +84,7 @@ func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs, bufferFrames int
 
 	silence := make([]int16, samplesPerFrame)
 
+	// Build the sink chain: jitter buffer → volume control → original sink
 	var finalSink Sink
 	if jitterBuf {
 		// Create jitter buffer with configurable delay
@@ -92,8 +96,12 @@ func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs, bufferFrames int
 		log.Printf("Engine: jitter buffer disabled")
 	}
 
+	// Wrap with volume controller
+	volumeCtrl := NewVolumeController(DefaultVolume)
+	volSink := &volumeSink{inner: finalSink, ctrl: volumeCtrl}
+
 	return &Engine{
-		sink:            finalSink,
+		sink:            volSink,
 		jitter:          nil, // only set if jitter buffer is used
 		stopCh:          make(chan struct{}),
 		doneCh:          make(chan struct{}),
@@ -102,6 +110,7 @@ func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs, bufferFrames int
 		samplesPerFrame: samplesPerFrame,
 		bufferFrames:    bufferFrames,
 		silence:         silence,
+		volumeCtrl:      volumeCtrl,
 	}
 }
 
@@ -405,6 +414,11 @@ func (e *Engine) Stop() {
 // (track ends) or is stopped.
 func (e *Engine) Done() <-chan struct{} {
 	return e.doneCh
+}
+
+// VolumeController returns the engine's shared volume controller.
+func (e *Engine) VolumeController() *VolumeController {
+	return e.volumeCtrl
 }
 
 // IsPlaying reports whether FFmpeg is currently running.

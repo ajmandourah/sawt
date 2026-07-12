@@ -23,6 +23,7 @@ import (
 	"github.com/ladis/sawt/internal/mumble"
 	"github.com/ladis/sawt/internal/queue"
 	"github.com/ladis/sawt/internal/source"
+	"strconv"
 )
 
 func main() {
@@ -62,6 +63,10 @@ func main() {
 	// Create queue manager
 	qm := queue.New(engine)
 	qm.LoadHistory(filepath.Join(cfg.DataDir, "history.json"))
+
+	// Attach shared volume controller
+	qm.SetVolumeController(engine.VolumeController())
+	qm.LoadVolume(filepath.Join(cfg.DataDir, "volume.json"))
 
 	// Ensure yt-dlp binary is available (downloads from GitHub if missing).
 	ytDlpManager := source.NewManager(cfg.DataDir)
@@ -139,7 +144,7 @@ I'm online and ready to play music! Use <b>%splay &lt;track&gt;</b> to start.<br
 		cfg.Prefix)
 	client.SendMessage(welcomeMsg)
 
-	// Periodically save URLs
+	// Periodically save URLs and volume
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
@@ -150,11 +155,13 @@ I'm online and ready to play music! Use <b>%splay &lt;track&gt;</b> to start.<br
 				apiStore.SaveURLs(filepath.Join(cfg.DataDir, "urls.json"))
 				apiStore.SavePlaylists(filepath.Join(cfg.DataDir, "playlists.json"))
 				qm.SaveHistory(filepath.Join(cfg.DataDir, "history.json"))
+				qm.SaveVolume(filepath.Join(cfg.DataDir, "volume.json"))
 				return
 			case <-ticker.C:
 				apiStore.SaveURLs(filepath.Join(cfg.DataDir, "urls.json"))
 				apiStore.SavePlaylists(filepath.Join(cfg.DataDir, "playlists.json"))
 				qm.SaveHistory(filepath.Join(cfg.DataDir, "history.json"))
+				qm.SaveVolume(filepath.Join(cfg.DataDir, "volume.json"))
 			}
 		}
 	}()
@@ -174,26 +181,25 @@ I'm online and ready to play music! Use <b>%splay &lt;track&gt;</b> to start.<br
 func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manager, chain *source.Chain, cfg *config.Config) {
 	// !help
 	d.Register("help", func(user *gumble.User, action *command.Action) string {
-		return fmt.Sprintf(`<b><font color="#7cfc00">Sawt (صوت)</font></b> — Mumble Music Bot<br><br>
+		p := cfg.Prefix
+		return `<b><font color="#7cfc00">Sawt (صوت)</font></b> — Mumble Music Bot<br><br>
 <b>Commands:</b><br>
-<b>%shelp</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Show this help message<br>
-<b>%sping</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Check if bot is alive<br>
-<b>%splay &lt;src&gt;</b>&nbsp;&nbsp;&nbsp;Play a file, URL, or directory<br>
-<b>%sstop</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Stop playback and clear queue<br>
-<b>%sskip</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Skip to next track<br>
-<b>%spause</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Pause playback<br>
-<b>%sresume</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Resume playback<br>
-<b>%squeue</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Show current queue<br>
-<b>%snowplaying</b>&nbsp;&nbsp;Show current track<br>
+<b>` + p + `help</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Show this help message<br>
+<b>` + p + `ping</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Check if bot is alive<br>
+<b>` + p + `play &lt;src&gt;</b>&nbsp;&nbsp;&nbsp;Play a file, URL, or directory<br>
+<b>` + p + `stop</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Stop playback and clear queue<br>
+<b>` + p + `skip</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Skip to next track<br>
+<b>` + p + `pause</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Pause playback<br>
+<b>` + p + `resume</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Resume playback<br>
+<b>` + p + `queue</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Show current queue<br>
+<b>` + p + `nowplaying</b>&nbsp;&nbsp;Show current track<br>
+<b>` + p + `volume</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Set volume 0–200 (default: 50)<br>
+<b>` + p + `mute</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Mute audio<br>
+<b>` + p + `unmute</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Unmute audio<br>
+<b>` + p + `vol+</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Increase volume by 10<br>
+<b>` + p + `vol-</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Decrease volume by 10<br>
 <br>
-<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>`,
-			cfg.Prefix, cfg.Prefix, cfg.Prefix, cfg.Prefix,
-			cfg.Prefix, cfg.Prefix, cfg.Prefix, cfg.Prefix, cfg.Prefix)
-	})
-
-	// !ping
-	d.Register("ping", func(user *gumble.User, action *command.Action) string {
-		return "Pong! 🏓"
+<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>`
 	})
 
 	// !play
@@ -285,6 +291,70 @@ func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manag
 			return "Nothing playing right now"
 		}
 		return fmt.Sprintf("🎵 Now playing: %s (requested by %s)", curr.Title, curr.RequestedBy)
+	})
+
+	// !volume <0-200>
+	d.Register("volume", func(user *gumble.User, action *command.Action) string {
+		if action.Args == "" {
+			return fmt.Sprintf("🔊 Volume: %d%%", qm.Volume())
+		}
+		pct, err := strconv.Atoi(action.Args)
+		if err != nil || pct < 0 || pct > 200 {
+			return "Usage: " + cfg.Prefix + "volume <0-200>"
+		}
+		actual := qm.SetVolume(pct)
+		return fmt.Sprintf("🔊 Volume: %d%%", actual)
+	})
+
+	// !vol (alias for !volume)
+	d.Register("vol", func(user *gumble.User, action *command.Action) string {
+		if action.Args == "" {
+			return fmt.Sprintf("🔊 Volume: %d%%", qm.Volume())
+		}
+		pct, err := strconv.Atoi(action.Args)
+		if err != nil || pct < 0 || pct > 200 {
+			return "Usage: " + cfg.Prefix + "vol <0-200>"
+		}
+		actual := qm.SetVolume(pct)
+		return fmt.Sprintf("🔊 Volume: %d%%", actual)
+	})
+
+	// !vol+ (increment)
+	d.Register("vol+", func(user *gumble.User, action *command.Action) string {
+		step := 10
+		if action.Args != "" {
+			if n, err := strconv.Atoi(action.Args); err == nil && n > 0 {
+				step = n
+			}
+		}
+		current := qm.Volume()
+		actual := qm.SetVolume(current + step)
+		return fmt.Sprintf("🔊 Volume: %d%%", actual)
+	})
+
+	// !vol- (decrement)
+	d.Register("vol-", func(user *gumble.User, action *command.Action) string {
+		step := 10
+		if action.Args != "" {
+			if n, err := strconv.Atoi(action.Args); err == nil && n > 0 {
+				step = n
+			}
+		}
+		current := qm.Volume()
+		actual := qm.SetVolume(current - step)
+		return fmt.Sprintf("🔊 Volume: %d%%", actual)
+	})
+
+	// !mute
+	d.Register("mute", func(user *gumble.User, action *command.Action) string {
+		qm.Mute()
+		return "🔇 Muted"
+	})
+
+	// !unmute
+	d.Register("unmute", func(user *gumble.User, action *command.Action) string {
+		qm.Unmute()
+		return "🔊 Unmuted"
 	})
 }
 

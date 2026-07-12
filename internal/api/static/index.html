@@ -1,387 +1,1015 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" class="dark">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Sawt — Mumble Music Bot</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            brand: { 50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d' },
-            zinc: { 850: '#1c1c1e' }
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Sawt — Mumble Music Bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: "#f0fdf4",
+                100: "#dcfce7",
+                200: "#bbf7d0",
+                300: "#86efac",
+                400: "#4ade80",
+                500: "#22c55e",
+                600: "#16a34a",
+                700: "#15803d",
+                800: "#166534",
+                900: "#14532d",
+              },
+              zinc: { 850: "#1c1c1e" },
+            },
+            fontFamily: {
+              sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
+              mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+            },
+            animation: {
+              "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+              "slide-up": "slideUp 0.3s ease-out",
+              "slide-down": "slideDown 0.3s ease-out",
+              "fade-in": "fadeIn 0.2s ease-out",
+            },
           },
-          fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'], mono: ['JetBrains Mono', 'ui-monospace', 'monospace'] },
-          animation: { 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite', 'slide-up': 'slideUp 0.3s ease-out', 'slide-down': 'slideDown 0.3s ease-out', 'fade-in': 'fadeIn 0.2s ease-out' }
+        },
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      @keyframes slideUp {
+        from {
+          transform: translateY(10px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
         }
       }
-    }
-  </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>
-    @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes spin-slow { to { transform: rotate(360deg); } }
-    .spin-slow { animation: spin-slow 2s linear infinite; }
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: #22c55e; cursor: pointer; margin-top: -5px; }
-    input[type="range"]::-moz-range-thumb { height: 14px; width: 14px; border-radius: 50%; background: #22c55e; cursor: pointer; border: none; }
-    .glass { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-    .drag-over { border-color: #22c55e !important; background: rgba(34, 197, 94, 0.1) !important; }
-  </style>
-</head>
-<body class="bg-zinc-950 text-zinc-50 font-sans min-h-screen overflow-hidden select-none">
-
-  <!-- ===== DESKTOP LAYOUT ===== -->
-  <div class="flex h-screen">
-
-    <!-- Sidebar (desktop) -->
-    <aside id="sidebar" class="hidden md:flex flex-col w-64 bg-zinc-900/80 glass border-r border-zinc-800/50 h-full flex-shrink-0">
-      <div class="p-5 border-b border-zinc-800/50">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-brand-500/20 flex items-center justify-center">
-            <svg class="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          </div>
-          <div>
-            <h1 class="text-lg font-bold tracking-tight">Sawt</h1>
-            <p class="text-xs text-zinc-500 font-medium">Mumble Music Bot</p>
-          </div>
-        </div>
-      </div>
-      <nav class="flex-1 p-3 space-y-1">
-        <button onclick="switchTab('library')" data-tab="library" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M21 3v18l-7.89-5.26a2 2 0 00-2.22 0L3 21V3z"/></svg>
-          Library
-        </button>
-        <button onclick="switchTab('queue')" data-tab="queue" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          Queue
-          <span id="queue-badge-sidebar" class="ml-auto bg-brand-500/20 text-brand-400 text-xs font-bold px-2 py-0.5 rounded-full hidden">0</span>
-        </button>
-        <button onclick="switchTab('playlists')" data-tab="playlists" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-          Playlists
-        </button>
-        <button onclick="switchTab('history')" data-tab="history" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          History
-        </button>
-        <button onclick="switchTab('upload')" data-tab="upload" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-          Upload
-        </button>
-      </nav>
-      <!-- Now Playing (mini) -->
-      <div id="sidebar-now-playing" class="hidden p-4 border-t border-zinc-800/50">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg bg-brand-500/20 flex items-center justify-center">
-            <svg class="w-5 h-5 text-brand-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium truncate" id="sidebar-track-name">No track playing</p>
-            <p class="text-xs text-zinc-500 truncate" id="sidebar-status">Idle</p>
-          </div>
-        </div>
-      </div>
-      <!-- Links -->
-      <div class="p-4 border-t border-zinc-800/50">
-        <div class="flex items-center gap-2 text-xs text-zinc-500">
-          <a href="https://github.com/ajmandourah/sawt" target="_blank" rel="noopener noreferrer" class="hover:text-brand-400 transition-colors duration-200">GitHub</a>
-          <span>·</span>
-          <a href="https://github.com/ajmandourah/sawt/issues" target="_blank" rel="noopener noreferrer" class="hover:text-brand-400 transition-colors duration-200">Issues</a>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col h-full overflow-hidden">
-
-      <!-- Top Bar (desktop) -->
-      <header class="hidden md:flex items-center justify-between px-6 py-4 border-b border-zinc-800/50 bg-zinc-950/50 glass">
-        <h2 id="page-title" class="text-xl font-bold tracking-tight">Library</h2>
-        <div class="flex items-center gap-3">
-          <div id="connection-status" class="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full bg-zinc-800/60">
-            <span class="w-2 h-2 rounded-full bg-red-500"></span>
-            <span class="text-zinc-400">Disconnected</span>
-          </div>
-        </div>
-      </header>
-
-      <!-- Content Area -->
-      <div id="content-area" class="flex-1 overflow-y-auto scrollbar-hide pb-24 md:pb-0">
-
-        <!-- ===== LIBRARY TAB ===== -->
-        <section id="tab-library" class="tab-content p-4 md:p-6 max-w-4xl mx-auto">
-          <!-- Search -->
-          <div class="relative mb-5">
-            <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-            <input type="text" id="search-input" placeholder="Search tracks..." class="w-full pl-12 pr-4 py-3 bg-zinc-900/60 border border-zinc-800/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/40 transition-all duration-200 placeholder:text-zinc-600" oninput="filterLibrary()" />
-          </div>
-          <!-- URL Input -->
-          <div class="mb-5 p-4 bg-zinc-900/40 border border-zinc-800/50 rounded-xl">
-            <p class="text-sm font-medium text-zinc-300 mb-2">Add URL (YouTube, SoundCloud, direct stream)</p>
-            <div class="flex gap-2">
-              <input type="text" id="url-input" placeholder="https://youtube.com/watch?v=..." class="flex-1 px-4 py-2.5 bg-zinc-800/60 border border-zinc-700/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 placeholder:text-zinc-600" />
-              <button onclick="addURL()" class="px-4 py-2.5 bg-brand-500 hover:bg-brand-400 text-zinc-950 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap">Add</button>
+      @keyframes slideDown {
+        from {
+          transform: translateY(-10px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes spin-slow {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .spin-slow {
+        animation: spin-slow 2s linear infinite;
+      }
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+      .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 14px;
+        width: 14px;
+        border-radius: 50%;
+        background: #22c55e;
+        cursor: pointer;
+        margin-top: -5px;
+      }
+      input[type="range"]::-moz-range-thumb {
+        height: 14px;
+        width: 14px;
+        border-radius: 50%;
+        background: #22c55e;
+        cursor: pointer;
+        border: none;
+      }
+      .glass {
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+      .drag-over {
+        border-color: #22c55e !important;
+        background: rgba(34, 197, 94, 0.1) !important;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-zinc-950 text-zinc-50 font-sans min-h-screen overflow-hidden select-none"
+  >
+    <!-- ===== DESKTOP LAYOUT ===== -->
+    <div class="flex h-screen">
+      <!-- Sidebar (desktop) -->
+      <aside
+        id="sidebar"
+        class="hidden md:flex flex-col w-64 bg-zinc-900/80 glass border-r border-zinc-800/50 h-full flex-shrink-0"
+      >
+        <div class="p-5 border-b border-zinc-800/50">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-9 h-9 rounded-xl bg-brand-500/20 flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 text-brand-400"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-lg font-bold tracking-tight">Sawt</h1>
+              <p class="text-xs text-zinc-500 font-medium">Mumble Music Bot</p>
             </div>
           </div>
-          <!-- View Toggle -->
-          <div class="flex items-center justify-between mb-4">
-            <p class="text-sm text-zinc-500" id="library-count">Loading library...</p>
-            <div class="flex items-center gap-1 bg-zinc-900/60 rounded-lg p-1">
-              <button onclick="setView('list')" id="btn-view-list" class="view-btn p-1.5 rounded-md bg-zinc-800 text-zinc-100 transition-all"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
-              <button onclick="setView('grid')" id="btn-view-grid" class="view-btn p-1.5 rounded-md text-zinc-500 hover:text-zinc-300 transition-all"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
+        </div>
+        <nav class="flex-1 p-3 space-y-1">
+          <button
+            onclick="switchTab('library')"
+            data-tab="library"
+            class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M21 3v18l-7.89-5.26a2 2 0 00-2.22 0L3 21V3z"
+              />
+            </svg>
+            Library
+          </button>
+          <button
+            onclick="switchTab('queue')"
+            data-tab="queue"
+            class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              viewBox="0 0 24 24"
+            >
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+            Queue
+            <span
+              id="queue-badge-sidebar"
+              class="ml-auto bg-brand-500/20 text-brand-400 text-xs font-bold px-2 py-0.5 rounded-full hidden"
+              >0</span
+            >
+          </button>
+          <button
+            onclick="switchTab('playlists')"
+            data-tab="playlists"
+            class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+              />
+            </svg>
+            Playlists
+          </button>
+          <button
+            onclick="switchTab('history')"
+            data-tab="history"
+            class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              viewBox="0 0 24 24"
+            >
+              <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            History
+          </button>
+          <button
+            onclick="switchTab('upload')"
+            data-tab="upload"
+            class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-100"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+              />
+            </svg>
+            Upload
+          </button>
+        </nav>
+        <!-- Now Playing (mini) -->
+        <div
+          id="sidebar-now-playing"
+          class="hidden p-4 border-t border-zinc-800/50"
+        >
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 rounded-lg bg-brand-500/20 flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 text-brand-400"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
+                />
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium truncate" id="sidebar-track-name">
+                No track playing
+              </p>
+              <p class="text-xs text-zinc-500 truncate" id="sidebar-status">
+                Idle
+              </p>
             </div>
           </div>
-          <!-- Bulk actions bar -->
-          <div id="bulk-bar" class="hidden mb-4 p-3 bg-brand-500/10 border border-brand-500/20 rounded-xl flex items-center justify-between">
-            <span class="text-sm text-brand-300 font-medium" id="bulk-count">0 selected</span>
-            <div class="flex items-center gap-2">
-              <button onclick="createPlaylistFromSelection()" class="px-3 py-1.5 bg-brand-500 hover:bg-brand-400 text-zinc-950 text-xs font-bold rounded-lg transition-all duration-200">Save as Playlist</button>
-              <button onclick="clearSelection()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-lg transition-all duration-200">Cancel</button>
-            </div>
+        </div>
+        <!-- Volume Control -->
+        <div class="p-4 border-t border-zinc-800/50">
+          <div class="flex items-center gap-3">
+            <button
+              onclick="toggleMute()"
+              id="btn-mute"
+              class="p-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-400 hover:text-zinc-200 transition-all duration-200"
+              title="Mute/Unmute"
+            >
+              <svg
+                id="icon-volume-on"
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                <path d="M15.54 8.46a5 5 0 010 7.07" />
+                <path d="M19.07 4.93a10 10 0 010 14.14" />
+              </svg>
+              <svg
+                id="icon-volume-off"
+                class="w-5 h-5 hidden"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                <path d="M23 9l-6 6M17 9l6 6" />
+              </svg>
+            </button>
+            <input
+              type="range"
+              id="volume-slider"
+              min="0"
+              max="200"
+              value="50"
+              class="flex-1 h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer"
+              oninput="setVolume(this.value)"
+            />
+            <span
+              id="volume-label"
+              class="text-xs font-mono text-zinc-500 w-10 text-right"
+              >50%</span
+            >
           </div>
-          <!-- Library List -->
-          <div id="library-list" class="space-y-1.5"></div>
-          <!-- Library Grid -->
-          <div id="library-grid" class="hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
-        </section>
+        </div>
+        <!-- Links -->
+        <div class="p-4 border-t border-zinc-800/50">
+          <div class="flex items-center gap-2 text-xs text-zinc-500">
+            <a
+              href="https://github.com/ajmandourah/sawt"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-brand-400 transition-colors duration-200"
+              >GitHub</a
+            >
+            <span>·</span>
+            <a
+              href="https://github.com/ajmandourah/sawt/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-brand-400 transition-colors duration-200"
+              >Issues</a
+            >
+          </div>
+        </div>
+      </aside>
 
-        <!-- ===== QUEUE TAB ===== -->
-        <section id="tab-queue" class="tab-content hidden p-4 md:p-6 max-w-4xl mx-auto">
-          <!-- Now Playing Card -->
-          <div class="mb-6 p-5 bg-zinc-900/60 border border-zinc-800/50 rounded-2xl">
-            <div class="flex items-center gap-4">
-              <div id="np-art" class="w-16 h-16 rounded-xl bg-brand-500/20 flex items-center justify-center flex-shrink-0">
-                <svg class="w-8 h-8 text-brand-400 spin-slow" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <!-- Main Content -->
+      <main class="flex-1 flex flex-col h-full overflow-hidden">
+        <!-- Top Bar (desktop) -->
+        <header
+          class="hidden md:flex items-center justify-between px-6 py-4 border-b border-zinc-800/50 bg-zinc-950/50 glass"
+        >
+          <h2 id="page-title" class="text-xl font-bold tracking-tight">
+            Library
+          </h2>
+          <div class="flex items-center gap-3">
+            <div
+              id="connection-status"
+              class="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full bg-zinc-800/60"
+            >
+              <span class="w-2 h-2 rounded-full bg-red-500"></span>
+              <span class="text-zinc-400">Disconnected</span>
+            </div>
+          </div>
+        </header>
+
+        <!-- Content Area -->
+        <div
+          id="content-area"
+          class="flex-1 overflow-y-auto scrollbar-hide pb-24 md:pb-0"
+        >
+          <!-- ===== LIBRARY TAB ===== -->
+          <section
+            id="tab-library"
+            class="tab-content p-4 md:p-6 max-w-4xl mx-auto"
+          >
+            <!-- Search -->
+            <div class="relative mb-5">
+              <svg
+                class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                id="search-input"
+                placeholder="Search tracks..."
+                class="w-full pl-12 pr-4 py-3 bg-zinc-900/60 border border-zinc-800/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/40 transition-all duration-200 placeholder:text-zinc-600"
+                oninput="filterLibrary()"
+              />
+            </div>
+            <!-- URL Input -->
+            <div
+              class="mb-5 p-4 bg-zinc-900/40 border border-zinc-800/50 rounded-xl"
+            >
+              <p class="text-sm font-medium text-zinc-300 mb-2">
+                Add URL (YouTube, SoundCloud, direct stream)
+              </p>
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  id="url-input"
+                  placeholder="https://youtube.com/watch?v=..."
+                  class="flex-1 px-4 py-2.5 bg-zinc-800/60 border border-zinc-700/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 placeholder:text-zinc-600"
+                />
+                <button
+                  onclick="addURL()"
+                  class="px-4 py-2.5 bg-brand-500 hover:bg-brand-400 text-zinc-950 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap"
+                >
+                  Add
+                </button>
               </div>
-              <div class="flex-1 min-w-0">
-                <p id="np-title" class="text-lg font-bold truncate">No track playing</p>
-                <p id="np-status" class="text-sm text-zinc-500 mt-0.5">Idle</p>
-                <!-- Progress -->
-                <div class="mt-3">
-                  <div class="relative h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div id="np-progress" class="absolute top-0 left-0 h-full bg-brand-500 rounded-full transition-all duration-300" style="width: 0%"></div>
-                  </div>
-                  <div class="flex justify-between mt-1">
-                    <span id="np-time-current" class="text-xs text-zinc-600 font-mono">0:00</span>
-                    <span id="np-time-total" class="text-xs text-zinc-600 font-mono">0:00</span>
+            </div>
+            <!-- View Toggle -->
+            <div class="flex items-center justify-between mb-4">
+              <p class="text-sm text-zinc-500" id="library-count">
+                Loading library...
+              </p>
+              <div
+                class="flex items-center gap-1 bg-zinc-900/60 rounded-lg p-1"
+              >
+                <button
+                  onclick="setView('list')"
+                  id="btn-view-list"
+                  class="view-btn p-1.5 rounded-md bg-zinc-800 text-zinc-100 transition-all"
+                >
+                  <svg
+                    class="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"
+                    />
+                  </svg>
+                </button>
+                <button
+                  onclick="setView('grid')"
+                  id="btn-view-grid"
+                  class="view-btn p-1.5 rounded-md text-zinc-500 hover:text-zinc-300 transition-all"
+                >
+                  <svg
+                    class="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <!-- Bulk actions bar -->
+            <div
+              id="bulk-bar"
+              class="hidden mb-4 p-3 bg-brand-500/10 border border-brand-500/20 rounded-xl flex items-center justify-between"
+            >
+              <span class="text-sm text-brand-300 font-medium" id="bulk-count"
+                >0 selected</span
+              >
+              <div class="flex items-center gap-2">
+                <button
+                  onclick="createPlaylistFromSelection()"
+                  class="px-3 py-1.5 bg-brand-500 hover:bg-brand-400 text-zinc-950 text-xs font-bold rounded-lg transition-all duration-200"
+                >
+                  Save as Playlist
+                </button>
+                <button
+                  onclick="clearSelection()"
+                  class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium rounded-lg transition-all duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+            <!-- Library List -->
+            <div id="library-list" class="space-y-1.5"></div>
+            <!-- Library Grid -->
+            <div
+              id="library-grid"
+              class="hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"
+            ></div>
+          </section>
+
+          <!-- ===== QUEUE TAB ===== -->
+          <section
+            id="tab-queue"
+            class="tab-content hidden p-4 md:p-6 max-w-4xl mx-auto"
+          >
+            <!-- Now Playing Card -->
+            <div
+              class="mb-6 p-5 bg-zinc-900/60 border border-zinc-800/50 rounded-2xl"
+            >
+              <div class="flex items-center gap-4">
+                <div
+                  id="np-art"
+                  class="w-16 h-16 rounded-xl bg-brand-500/20 flex items-center justify-center flex-shrink-0"
+                >
+                  <svg
+                    class="w-8 h-8 text-brand-400 spin-slow"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M9 18V5l12-2v13" />
+                    <circle cx="6" cy="18" r="3" />
+                    <circle cx="18" cy="16" r="3" />
+                  </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p id="np-title" class="text-lg font-bold truncate">
+                    No track playing
+                  </p>
+                  <p id="np-status" class="text-sm text-zinc-500 mt-0.5">
+                    Idle
+                  </p>
+                  <!-- Progress -->
+                  <div class="mt-3">
+                    <div
+                      class="relative h-1.5 bg-zinc-800 rounded-full overflow-hidden"
+                    >
+                      <div
+                        id="np-progress"
+                        class="absolute top-0 left-0 h-full bg-brand-500 rounded-full transition-all duration-300"
+                        style="width: 0%"
+                      ></div>
+                    </div>
+                    <div class="flex justify-between mt-1">
+                      <span
+                        id="np-time-current"
+                        class="text-xs text-zinc-600 font-mono"
+                        >0:00</span
+                      >
+                      <span
+                        id="np-time-total"
+                        class="text-xs text-zinc-600 font-mono"
+                        >0:00</span
+                      >
+                    </div>
                   </div>
                 </div>
               </div>
+              <!-- Controls -->
+              <div class="flex items-center justify-center gap-4 mt-5">
+                <button
+                  onclick="skipBack()"
+                  class="p-2.5 rounded-full bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-300 transition-all duration-200"
+                  title="Previous"
+                >
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                  </svg>
+                </button>
+                <button
+                  onclick="togglePlay()"
+                  id="btn-play"
+                  class="p-4 rounded-full bg-brand-500 hover:bg-brand-400 text-zinc-950 transition-all duration-200 shadow-lg shadow-brand-500/25"
+                  title="Play/Pause"
+                >
+                  <svg
+                    id="icon-pause"
+                    class="w-6 h-6"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
+                  <svg
+                    id="icon-play"
+                    class="w-6 h-6 hidden"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </button>
+                <button
+                  onclick="skipForward()"
+                  class="p-2.5 rounded-full bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-300 transition-all duration-200"
+                  title="Next"
+                >
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <!-- Controls -->
-            <div class="flex items-center justify-center gap-4 mt-5">
-              <button onclick="skipBack()" class="p-2.5 rounded-full bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-300 transition-all duration-200" title="Previous">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-              </button>
-              <button onclick="togglePlay()" id="btn-play" class="p-4 rounded-full bg-brand-500 hover:bg-brand-400 text-zinc-950 transition-all duration-200 shadow-lg shadow-brand-500/25" title="Play/Pause">
-                <svg id="icon-pause" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                <svg id="icon-play" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              </button>
-              <button onclick="skipForward()" class="p-2.5 rounded-full bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-300 transition-all duration-200" title="Next">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+
+            <!-- Queue List -->
+            <div class="flex items-center justify-between mb-3">
+              <h3
+                class="text-sm font-semibold text-zinc-400 uppercase tracking-wider"
+              >
+                Up Next
+              </h3>
+              <button
+                onclick="clearQueue()"
+                class="text-xs text-zinc-500 hover:text-red-400 font-medium transition-colors duration-200"
+              >
+                Clear Queue
               </button>
             </div>
-          </div>
+            <div id="queue-list" class="space-y-1.5"></div>
+            <p id="queue-empty" class="text-center text-zinc-600 text-sm py-12">
+              Queue is empty. Add tracks from the library.
+            </p>
+          </section>
 
-          <!-- Queue List -->
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Up Next</h3>
-            <button onclick="clearQueue()" class="text-xs text-zinc-500 hover:text-red-400 font-medium transition-colors duration-200">Clear Queue</button>
-          </div>
-          <div id="queue-list" class="space-y-1.5"></div>
-          <p id="queue-empty" class="text-center text-zinc-600 text-sm py-12">Queue is empty. Add tracks from the library.</p>
-        </section>
-
-        <!-- ===== PLAYLISTS TAB ===== -->
-        <section id="tab-playlists" class="tab-content hidden p-4 md:p-6 max-w-4xl mx-auto">
-          <div class="mb-5">
-            <p class="text-sm text-zinc-500">Your saved playlists</p>
-          </div>
-          <div id="playlists-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-          <p id="playlists-empty" class="text-center text-zinc-600 text-sm py-12">No playlists yet. Select tracks in the library and save them.</p>
-        </section>
-
-        <!-- ===== UPLOAD TAB ===== -->
-        <section id="tab-upload" class="tab-content hidden p-4 md:p-6 max-w-2xl mx-auto">
-          <h3 class="text-lg font-bold mb-4">Upload Audio Files</h3>
-          <p class="text-sm text-zinc-500 mb-5">Drag & drop audio files or tap to browse. Supports MP3, WAV, and OGG.</p>
-
-          <!-- Drop Zone -->
-          <div id="drop-zone" class="border-2 border-dashed border-zinc-700/60 rounded-2xl p-8 text-center transition-all duration-300 hover:border-brand-500/50 cursor-pointer"
-               ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" onclick="document.getElementById('file-input').click()">
-            <input type="file" id="file-input" class="hidden" multiple accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg" onchange="handleFiles(this.files)" />
-            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-zinc-800/60 flex items-center justify-center">
-              <svg class="w-8 h-8 text-zinc-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+          <!-- ===== PLAYLISTS TAB ===== -->
+          <section
+            id="tab-playlists"
+            class="tab-content hidden p-4 md:p-6 max-w-4xl mx-auto"
+          >
+            <div class="mb-5">
+              <p class="text-sm text-zinc-500">Your saved playlists</p>
             </div>
-            <p class="text-sm font-medium text-zinc-300">Drop files here or tap to browse</p>
-            <p class="text-xs text-zinc-600 mt-1">MP3, WAV, OGG — up to 50MB each</p>
-          </div>
+            <div
+              id="playlists-grid"
+              class="grid grid-cols-1 sm:grid-cols-2 gap-3"
+            ></div>
+            <p
+              id="playlists-empty"
+              class="text-center text-zinc-600 text-sm py-12"
+            >
+              No playlists yet. Select tracks in the library and save them.
+            </p>
+          </section>
 
-          <!-- Upload Progress -->
-          <div id="upload-progress" class="hidden mt-5 space-y-3"></div>
-        </section>
+          <!-- ===== UPLOAD TAB ===== -->
+          <section
+            id="tab-upload"
+            class="tab-content hidden p-4 md:p-6 max-w-2xl mx-auto"
+          >
+            <h3 class="text-lg font-bold mb-4">Upload Audio Files</h3>
+            <p class="text-sm text-zinc-500 mb-5">
+              Drag & drop audio files or tap to browse. Supports MP3, WAV, and
+              OGG.
+            </p>
 
-        <!-- ===== HISTORY TAB ===== -->
-        <section id="tab-history" class="tab-content hidden p-4 md:p-6 max-w-4xl mx-auto">
-          <h3 class="text-lg font-bold mb-4">Play History</h3>
-          <p class="text-sm text-zinc-500 mb-5">Recently played tracks. Click "Replay" to add back to queue.</p>
-          <div id="history-list" class="space-y-1.5"></div>
-          <p id="history-empty" class="text-center text-zinc-600 text-sm py-12">No play history yet.</p>
-        </section>
+            <!-- Drop Zone -->
+            <div
+              id="drop-zone"
+              class="border-2 border-dashed border-zinc-700/60 rounded-2xl p-8 text-center transition-all duration-300 hover:border-brand-500/50 cursor-pointer"
+              ondragover="handleDragOver(event)"
+              ondragleave="handleDragLeave(event)"
+              ondrop="handleDrop(event)"
+              onclick="document.getElementById('file-input').click()"
+            >
+              <input
+                type="file"
+                id="file-input"
+                class="hidden"
+                multiple
+                accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg"
+                onchange="handleFiles(this.files)"
+              />
+              <div
+                class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-zinc-800/60 flex items-center justify-center"
+              >
+                <svg
+                  class="w-8 h-8 text-zinc-500"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
+              <p class="text-sm font-medium text-zinc-300">
+                Drop files here or tap to browse
+              </p>
+              <p class="text-xs text-zinc-600 mt-1">
+                MP3, WAV, OGG — up to 50MB each
+              </p>
+            </div>
 
-      </div>
+            <!-- Upload Progress -->
+            <div id="upload-progress" class="hidden mt-5 space-y-3"></div>
+          </section>
 
-      <!-- ===== MOBILE BOTTOM NAV ===== -->
-      <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-900/90 glass border-t border-zinc-800/50 z-50">
-        <div class="flex items-center justify-around py-2">
-          <button onclick="switchTab('library')" data-tab="library" class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M21 3v18l-7.89-5.26a2 2 0 00-2.22 0L3 21V3z"/></svg>
-            <span class="text-[10px] font-medium">Library</span>
-          </button>
-          <button onclick="switchTab('queue')" data-tab="queue" class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            <span class="text-[10px] font-medium">Queue</span>
-            <span id="queue-badge-mobile" class="absolute -top-0.5 -right-1 bg-brand-500 text-white text-[8px] font-bold px-1 py-0.5 rounded-full hidden">0</span>
-          </button>
-          <button onclick="switchTab('playlists')" data-tab="playlists" class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-            <span class="text-[10px] font-medium">Playlists</span>
-          </button>
-          <button onclick="switchTab('history')" data-tab="history" class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span class="text-[10px] font-medium">History</span>
-          </button>
-          <button onclick="switchTab('upload')" data-tab="upload" class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-            <span class="text-[10px] font-medium">Upload</span>
-          </button>
+          <!-- ===== HISTORY TAB ===== -->
+          <section
+            id="tab-history"
+            class="tab-content hidden p-4 md:p-6 max-w-4xl mx-auto"
+          >
+            <h3 class="text-lg font-bold mb-4">Play History</h3>
+            <p class="text-sm text-zinc-500 mb-5">
+              Recently played tracks. Click "Replay" to add back to queue.
+            </p>
+            <div id="history-list" class="space-y-1.5"></div>
+            <p
+              id="history-empty"
+              class="text-center text-zinc-600 text-sm py-12"
+            >
+              No play history yet.
+            </p>
+          </section>
         </div>
-      </nav>
-    </main>
-  </div>
 
-  <!-- ===== MODALS ===== -->
-  <!-- Toast Container -->
-  <div id="toast-container" class="fixed top-4 right-4 z-[200] space-y-2"></div>
+        <!-- ===== MOBILE VOLUME BAR ===== -->
+        <div
+          class="md:hidden fixed bottom-14 left-0 right-0 bg-zinc-900/90 glass border-t border-zinc-800/50 z-40 px-4 py-2"
+        >
+          <div class="flex items-center gap-3">
+            <button
+              onclick="toggleMute()"
+              class="p-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-400 hover:text-zinc-200 transition-all duration-200"
+              title="Mute/Unmute"
+            >
+              <svg
+                id="icon-volume-on-mobile"
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                <path d="M15.54 8.46a5 5 0 010 7.07" />
+                <path d="M19.07 4.93a10 10 0 010 14.14" />
+              </svg>
+              <svg
+                id="icon-volume-off-mobile"
+                class="w-5 h-5 hidden"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                <path d="M23 9l-6 6M17 9l6 6" />
+              </svg>
+            </button>
+            <input
+              type="range"
+              id="volume-slider-mobile"
+              min="0"
+              max="200"
+              value="50"
+              class="flex-1 h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer"
+              oninput="setVolume(this.value)"
+            />
+            <span
+              id="volume-label-mobile"
+              class="text-xs font-mono text-zinc-500 w-10 text-right"
+              >50%</span
+            >
+          </div>
+        </div>
 
-  <!-- ===== JAVASCRIPT ===== -->
-  <script>
-  // ============================================================
-  //  REAL API — Connects to the Sawt bot HTTP server
-  // ============================================================
-  const API_BASE = '/api';
+        <!-- ===== MOBILE BOTTOM NAV ===== -->
+        <nav
+          class="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-900/90 glass border-t border-zinc-800/50 z-50"
+        >
+          <div class="flex items-center justify-around py-2">
+            <button
+              onclick="switchTab('library')"
+              data-tab="library"
+              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
+            >
+              <svg
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M21 3v18l-7.89-5.26a2 2 0 00-2.22 0L3 21V3z"
+                />
+              </svg>
+              <span class="text-[10px] font-medium">Library</span>
+            </button>
+            <button
+              onclick="switchTab('queue')"
+              data-tab="queue"
+              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
+            >
+              <svg
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+              <span class="text-[10px] font-medium">Queue</span>
+              <span
+                id="queue-badge-mobile"
+                class="absolute -top-0.5 -right-1 bg-brand-500 text-white text-[8px] font-bold px-1 py-0.5 rounded-full hidden"
+                >0</span
+              >
+            </button>
+            <button
+              onclick="switchTab('playlists')"
+              data-tab="playlists"
+              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
+            >
+              <svg
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                />
+              </svg>
+              <span class="text-[10px] font-medium">Playlists</span>
+            </button>
+            <button
+              onclick="switchTab('history')"
+              data-tab="history"
+              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
+            >
+              <svg
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span class="text-[10px] font-medium">History</span>
+            </button>
+            <button
+              onclick="switchTab('upload')"
+              data-tab="upload"
+              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
+            >
+              <svg
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                />
+              </svg>
+              <span class="text-[10px] font-medium">Upload</span>
+            </button>
+          </div>
+        </nav>
+      </main>
+    </div>
 
-  async function fetchAPI(path, opts = {}) {
-    const res = await fetch(API_BASE + path, {
-      headers: { 'Content-Type': 'application/json', ...opts.headers },
-      ...opts
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || `HTTP ${res.status}`);
-    }
-    return res.json();
-  }
+    <!-- ===== MODALS ===== -->
+    <!-- Toast Container -->
+    <div
+      id="toast-container"
+      class="fixed top-4 right-4 z-[200] space-y-2"
+    ></div>
 
-  async function postAPI(path, data = {}) {
-    return fetchAPI(path, { method: 'POST', body: JSON.stringify(data) });
-  }
+    <!-- ===== JAVASCRIPT ===== -->
+    <script>
+      // ============================================================
+      //  REAL API — Connects to the Sawt bot HTTP server
+      // ============================================================
+      const API_BASE = "/api";
 
-  async function deleteAPI(path) {
-    return fetchAPI(path, { method: 'DELETE' });
-  }
+      async function fetchAPI(path, opts = {}) {
+        const res = await fetch(API_BASE + path, {
+          headers: { "Content-Type": "application/json", ...opts.headers },
+          ...opts,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+        return res.json();
+      }
 
-  // ============================================================
-  //  STATE
-  // ============================================================
-  let allTracks = [];
-  let filteredTracks = [];
-  let queue = [];
-  let playlists = [];
-  let nowPlaying = null;
-  let isPlaying = false;
-  let currentView = 'list';
-  let selectedIds = new Set();
-  let progressInterval = null;
-  let progressSeconds = 0;
-  let totalSeconds = 0;
-  let refreshInterval = null;
+      async function postAPI(path, data = {}) {
+        return fetchAPI(path, { method: "POST", body: JSON.stringify(data) });
+      }
 
-  // ============================================================
-  //  TAB SWITCHING
-  // ============================================================
-  function switchTab(tab) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-    document.getElementById('tab-' + tab).classList.remove('hidden');
-    document.getElementById('page-title').textContent = tab.charAt(0).toUpperCase() + tab.slice(1);
+      async function deleteAPI(path) {
+        return fetchAPI(path, { method: "DELETE" });
+      }
 
-    // Update nav active states
-    document.querySelectorAll('.nav-item').forEach(btn => {
-      const isActive = btn.dataset.tab === tab;
-      btn.classList.toggle('bg-zinc-800/80', isActive);
-      btn.classList.toggle('text-zinc-100', isActive);
-      btn.classList.toggle('text-zinc-400', !isActive);
-    });
-    document.querySelectorAll('.mob-nav-item').forEach(btn => {
-      const isActive = btn.dataset.tab === tab;
-      btn.classList.toggle('text-brand-400', isActive);
-      btn.classList.toggle('text-zinc-500', !isActive);
-    });
-  }
+      // ============================================================
+      //  STATE
+      // ============================================================
+      let allTracks = [];
+      let filteredTracks = [];
+      let queue = [];
+      let playlists = [];
+      let nowPlaying = null;
+      let isPlaying = false;
+      let currentView = "list";
+      let selectedIds = new Set();
+      let progressInterval = null;
+      let progressSeconds = 0;
+      let totalSeconds = 0;
+      let refreshInterval = null;
 
-  // ============================================================
-  //  VIEW TOGGLE (List / Grid)
-  // ============================================================
-  function setView(view) {
-    currentView = view;
-    document.getElementById('btn-view-list').classList.toggle('bg-zinc-800', view === 'list');
-    document.getElementById('btn-view-list').classList.toggle('text-zinc-100', view === 'list');
-    document.getElementById('btn-view-list').classList.toggle('text-zinc-500', view !== 'list');
-    document.getElementById('btn-view-grid').classList.toggle('bg-zinc-800', view === 'grid');
-    document.getElementById('btn-view-grid').classList.toggle('text-zinc-100', view === 'grid');
-    document.getElementById('btn-view-grid').classList.toggle('text-zinc-500', view !== 'grid');
-    document.getElementById('library-list').classList.toggle('hidden', view !== 'list');
-    document.getElementById('library-grid').classList.toggle('hidden', view !== 'grid');
-    renderLibrary();
-  }
+      // ============================================================
+      //  TAB SWITCHING
+      // ============================================================
+      function switchTab(tab) {
+        document
+          .querySelectorAll(".tab-content")
+          .forEach((el) => el.classList.add("hidden"));
+        document.getElementById("tab-" + tab).classList.remove("hidden");
+        document.getElementById("page-title").textContent =
+          tab.charAt(0).toUpperCase() + tab.slice(1);
 
-  // ============================================================
-  //  SEARCH / FILTER
-  // ============================================================
-  function filterLibrary() {
-    const q = document.getElementById('search-input').value.toLowerCase().trim();
-    filteredTracks = allTracks.filter(t => t.name.toLowerCase().includes(q));
-    renderLibrary();
-  }
+        // Update nav active states
+        document.querySelectorAll(".nav-item").forEach((btn) => {
+          const isActive = btn.dataset.tab === tab;
+          btn.classList.toggle("bg-zinc-800/80", isActive);
+          btn.classList.toggle("text-zinc-100", isActive);
+          btn.classList.toggle("text-zinc-400", !isActive);
+        });
+        document.querySelectorAll(".mob-nav-item").forEach((btn) => {
+          const isActive = btn.dataset.tab === tab;
+          btn.classList.toggle("text-brand-400", isActive);
+          btn.classList.toggle("text-zinc-500", !isActive);
+        });
+      }
 
-  // ============================================================
-  //  RENDER: LIBRARY
-  // ============================================================
-  function renderLibrary() {
-    const listEl = document.getElementById('library-list');
-    const gridEl = document.getElementById('library-grid');
-    const countEl = document.getElementById('library-count');
+      // ============================================================
+      //  VIEW TOGGLE (List / Grid)
+      // ============================================================
+      function setView(view) {
+        currentView = view;
+        document
+          .getElementById("btn-view-list")
+          .classList.toggle("bg-zinc-800", view === "list");
+        document
+          .getElementById("btn-view-list")
+          .classList.toggle("text-zinc-100", view === "list");
+        document
+          .getElementById("btn-view-list")
+          .classList.toggle("text-zinc-500", view !== "list");
+        document
+          .getElementById("btn-view-grid")
+          .classList.toggle("bg-zinc-800", view === "grid");
+        document
+          .getElementById("btn-view-grid")
+          .classList.toggle("text-zinc-100", view === "grid");
+        document
+          .getElementById("btn-view-grid")
+          .classList.toggle("text-zinc-500", view !== "grid");
+        document
+          .getElementById("library-list")
+          .classList.toggle("hidden", view !== "list");
+        document
+          .getElementById("library-grid")
+          .classList.toggle("hidden", view !== "grid");
+        renderLibrary();
+      }
 
-    countEl.textContent = `${filteredTracks.length} track${filteredTracks.length !== 1 ? 's' : ''}`;
+      // ============================================================
+      //  SEARCH / FILTER
+      // ============================================================
+      function filterLibrary() {
+        const q = document
+          .getElementById("search-input")
+          .value.toLowerCase()
+          .trim();
+        filteredTracks = allTracks.filter((t) =>
+          t.name.toLowerCase().includes(q),
+        );
+        renderLibrary();
+      }
 
-    // List view
-    listEl.innerHTML = filteredTracks.map(t => `
-      <div class="group flex items-center gap-3 p-3 rounded-xl bg-zinc-900/40 hover:bg-zinc-900/70 border border-transparent hover:border-zinc-800/50 transition-all duration-200 ${selectedIds.has(t.id) ? 'ring-1 ring-brand-500/40 bg-brand-500/5' : ''}" data-id="${t.id}">
-        <input type="checkbox" class="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-brand-500 accent-brand-500 cursor-pointer" ${selectedIds.has(t.id) ? 'checked' : ''} onchange="toggleSelect('${t.id}')" />
+      // ============================================================
+      //  RENDER: LIBRARY
+      // ============================================================
+      function renderLibrary() {
+        const listEl = document.getElementById("library-list");
+        const gridEl = document.getElementById("library-grid");
+        const countEl = document.getElementById("library-count");
+
+        countEl.textContent = `${filteredTracks.length} track${filteredTracks.length !== 1 ? "s" : ""}`;
+
+        // List view
+        listEl.innerHTML = filteredTracks
+          .map(
+            (t) => `
+      <div class="group flex items-center gap-3 p-3 rounded-xl bg-zinc-900/40 hover:bg-zinc-900/70 border border-transparent hover:border-zinc-800/50 transition-all duration-200 ${selectedIds.has(t.id) ? "ring-1 ring-brand-500/40 bg-brand-500/5" : ""}" data-id="${t.id}">
+        <input type="checkbox" class="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-brand-500 accent-brand-500 cursor-pointer" ${selectedIds.has(t.id) ? "checked" : ""} onchange="toggleSelect('${t.id}')" />
         <div class="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0 group-hover:bg-zinc-700 transition-colors">
           <svg class="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium truncate ${nowPlaying?.id === t.id ? 'text-brand-400' : 'text-zinc-200'}">${t.name}</p>
+          <p class="text-sm font-medium truncate ${nowPlaying?.id === t.id ? "text-brand-400" : "text-zinc-200"}">${t.name}</p>
           <p class="text-xs text-zinc-600">${t.duration} · ${t.size}</p>
         </div>
         <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -393,11 +1021,15 @@
           </button>
         </div>
       </div>
-    `).join('');
+    `,
+          )
+          .join("");
 
-    // Grid view
-    gridEl.innerHTML = filteredTracks.map(t => `
-      <div class="group p-3 rounded-xl bg-zinc-900/40 hover:bg-zinc-900/70 border border-transparent hover:border-zinc-800/50 transition-all duration-200 ${selectedIds.has(t.id) ? 'ring-1 ring-brand-500/40' : ''}" data-id="${t.id}">
+        // Grid view
+        gridEl.innerHTML = filteredTracks
+          .map(
+            (t) => `
+      <div class="group p-3 rounded-xl bg-zinc-900/40 hover:bg-zinc-900/70 border border-transparent hover:border-zinc-800/50 transition-all duration-200 ${selectedIds.has(t.id) ? "ring-1 ring-brand-500/40" : ""}" data-id="${t.id}">
         <div class="w-full aspect-square rounded-lg bg-zinc-800 flex items-center justify-center mb-3 group-hover:bg-zinc-700 transition-colors relative overflow-hidden">
           <svg class="w-8 h-8 text-zinc-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
@@ -410,73 +1042,82 @@
         <p class="text-xs text-zinc-600">${t.duration}</p>
         <div class="flex items-center gap-1 mt-2">
           <button onclick="addToQueue('${t.id}')" class="flex-1 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-all duration-200">+ Queue</button>
-          <input type="checkbox" class="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-brand-500 accent-brand-500" ${selectedIds.has(t.id) ? 'checked' : ''} onchange="toggleSelect('${t.id}')" />
+          <input type="checkbox" class="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-brand-500 accent-brand-500" ${selectedIds.has(t.id) ? "checked" : ""} onchange="toggleSelect('${t.id}')" />
         </div>
       </div>
-    `).join('');
-  }
+    `,
+          )
+          .join("");
+      }
 
-  // ============================================================
-  //  RENDER: QUEUE
-  // ============================================================
-  function renderQueue() {
-    const listEl = document.getElementById('queue-list');
-    const emptyEl = document.getElementById('queue-empty');
-    const badge = document.getElementById('queue-badge-mobile');
-    const badgeSidebar = document.getElementById('queue-badge-sidebar');
+      // ============================================================
+      //  RENDER: QUEUE
+      // ============================================================
+      function renderQueue() {
+        const listEl = document.getElementById("queue-list");
+        const emptyEl = document.getElementById("queue-empty");
+        const badge = document.getElementById("queue-badge-mobile");
+        const badgeSidebar = document.getElementById("queue-badge-sidebar");
 
-    if (queue.length === 0) {
-      listEl.innerHTML = '';
-      emptyEl.classList.remove('hidden');
-      badge.classList.add('hidden');
-      badgeSidebar.classList.add('hidden');
-      return;
-    }
+        if (queue.length === 0) {
+          listEl.innerHTML = "";
+          emptyEl.classList.remove("hidden");
+          badge.classList.add("hidden");
+          badgeSidebar.classList.add("hidden");
+          return;
+        }
 
-    emptyEl.classList.add('hidden');
-    badge.textContent = queue.length;
-    badge.classList.remove('hidden');
-    badgeSidebar.textContent = queue.length;
-    badgeSidebar.classList.remove('hidden');
+        emptyEl.classList.add("hidden");
+        badge.textContent = queue.length;
+        badge.classList.remove("hidden");
+        badgeSidebar.textContent = queue.length;
+        badgeSidebar.classList.remove("hidden");
 
-    listEl.innerHTML = queue.map((t, i) => `
+        listEl.innerHTML = queue
+          .map(
+            (t, i) => `
       <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/40 hover:bg-zinc-900/70 border border-transparent transition-all duration-200 group">
         <span class="text-xs font-mono text-zinc-600 w-5 text-center">${i + 1}</span>
         <div class="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
           ${nowPlaying?.id === t.id ? '<svg class="w-5 h-5 text-brand-400 spin-slow" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>' : '<svg class="w-5 h-5 text-zinc-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'}
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium truncate ${nowPlaying?.id === t.id ? 'text-brand-400' : 'text-zinc-200'}">${t.name}</p>
-          <p class="text-xs text-zinc-600">${t.sourceType || 'local'}${t.duration ? ' · ' + t.duration : ''}</p>
+          <p class="text-sm font-medium truncate ${nowPlaying?.id === t.id ? "text-brand-400" : "text-zinc-200"}">${t.name}</p>
+          <p class="text-xs text-zinc-600">${t.sourceType || "local"}${t.duration ? " · " + t.duration : ""}</p>
         </div>
         <button onclick="removeFromQueue(${i})" class="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-zinc-700 text-zinc-500 hover:text-red-400 transition-all duration-200" title="Remove">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
       </div>
-    `).join('');
-  }
+    `,
+          )
+          .join("");
+      }
 
-  // ============================================================
-  //  RENDER: PLAYLISTS
-  // ============================================================
-  function renderPlaylists() {
-    const grid = document.getElementById('playlists-grid');
-    const empty = document.getElementById('playlists-empty');
+      // ============================================================
+      //  RENDER: PLAYLISTS
+      // ============================================================
+      function renderPlaylists() {
+        const grid = document.getElementById("playlists-grid");
+        const empty = document.getElementById("playlists-empty");
 
-    if (playlists.length === 0) {
-      grid.innerHTML = '';
-      empty.classList.remove('hidden');
-      return;
-    }
+        if (playlists.length === 0) {
+          grid.innerHTML = "";
+          empty.classList.remove("hidden");
+          return;
+        }
 
-    empty.classList.add('hidden');
-    grid.innerHTML = playlists.map(p => {
-      const tracks = p.trackIds.map(id => allTracks.find(t => t.id === id)).filter(Boolean);
-      const totalDur = tracks.reduce((sum, t) => {
-        const [m, s] = t.duration.split(':').map(Number);
-        return sum + m * 60 + s;
-      }, 0);
-      return `
+        empty.classList.add("hidden");
+        grid.innerHTML = playlists
+          .map((p) => {
+            const tracks = p.trackIds
+              .map((id) => allTracks.find((t) => t.id === id))
+              .filter(Boolean);
+            const totalDur = tracks.reduce((sum, t) => {
+              const [m, s] = t.duration.split(":").map(Number);
+              return sum + m * 60 + s;
+            }, 0);
+            return `
         <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-200">
           <div class="flex items-start justify-between mb-3">
             <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-500/30 to-brand-600/10 flex items-center justify-center">
@@ -491,217 +1132,222 @@
           <button onclick="loadPlaylist('${p.id}')" class="w-full py-2 text-xs font-bold bg-brand-500/20 hover:bg-brand-500/40 text-brand-400 rounded-lg transition-all duration-200">Play All</button>
         </div>
       `;
-    }).join('');
-  }
-
-  // ============================================================
-  //  ACTIONS
-  // ============================================================
-  async function playNow(trackId) {
-    try {
-      const res = await postAPI('/play', { id: trackId });
-      const track = allTracks.find(t => t.id === trackId);
-      if (!track) return;
-      nowPlaying = { ...track, id: trackId };
-      isPlaying = true;
-      totalSeconds = track.seconds || 0;
-      progressSeconds = 0;
-      updateNowPlaying();
-      startProgress();
-      switchTab('queue');
-      toast(`Now playing: ${track.name}`, 'info');
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
-
-  async function togglePlay() {
-    try {
-      if (isPlaying) {
-        await postAPI('/queue/pause');
-        isPlaying = false;
-        stopProgress();
-        updateNowPlaying();
-        return;
+          })
+          .join("");
       }
-      if (!nowPlaying) {
-        // Idle — play the queue
-        await postAPI('/queue/play', {});
-      } else {
-        await postAPI('/queue/resume');
+
+      // ============================================================
+      //  ACTIONS
+      // ============================================================
+      async function playNow(trackId) {
+        try {
+          const res = await postAPI("/play", { id: trackId });
+          const track = allTracks.find((t) => t.id === trackId);
+          if (!track) return;
+          nowPlaying = { ...track, id: trackId };
+          isPlaying = true;
+          totalSeconds = track.seconds || 0;
+          progressSeconds = 0;
+          updateNowPlaying();
+          startProgress();
+          switchTab("queue");
+          toast(`Now playing: ${track.name}`, "info");
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
       }
-      isPlaying = true;
-      startProgress();
-      await loadQueue();
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
 
-  async function skipForward() {
-    try {
-      await postAPI('/queue/skip');
-      // Refresh queue state from server
-      await loadQueue();
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
+      async function togglePlay() {
+        try {
+          if (isPlaying) {
+            await postAPI("/queue/pause");
+            isPlaying = false;
+            stopProgress();
+            updateNowPlaying();
+            return;
+          }
+          if (!nowPlaying) {
+            // Idle — play the queue
+            await postAPI("/queue/play", {});
+          } else {
+            await postAPI("/queue/resume");
+          }
+          isPlaying = true;
+          startProgress();
+          await loadQueue();
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
 
-  async function skipBack() {
-    try {
-      if (!nowPlaying) return;
-      await postAPI('/queue/restart', {});
-      progressSeconds = 0;
-      updateProgressUI();
-      startProgress();
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
+      async function skipForward() {
+        try {
+          await postAPI("/queue/skip");
+          // Refresh queue state from server
+          await loadQueue();
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
 
-  async function addToQueue(trackId) {
-    try {
-      await postAPI('/queue/add', { id: trackId });
-      const track = allTracks.find(t => t.id === trackId);
-      if (!track) return;
-      // Refresh queue from server
-      await loadQueue();
-      toast(`Added to queue: ${track.name}`, 'success');
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
+      async function skipBack() {
+        try {
+          if (!nowPlaying) return;
+          await postAPI("/queue/restart", {});
+          progressSeconds = 0;
+          updateProgressUI();
+          startProgress();
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
 
-  async function removeFromQueue(index) {
-    try {
-      await postAPI('/queue/remove', { index });
-      await loadQueue();
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
+      async function addToQueue(trackId) {
+        try {
+          await postAPI("/queue/add", { id: trackId });
+          const track = allTracks.find((t) => t.id === trackId);
+          if (!track) return;
+          // Refresh queue from server
+          await loadQueue();
+          toast(`Added to queue: ${track.name}`, "success");
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
 
-  async function clearQueue() {
-    try {
-      await postAPI('/queue/clear');
-      queue = [];
-      nowPlaying = null;
-      isPlaying = false;
-      stopProgress();
-      renderQueue();
-      updateNowPlaying();
-      toast('Queue cleared', 'info');
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
+      async function removeFromQueue(index) {
+        try {
+          await postAPI("/queue/remove", { index });
+          await loadQueue();
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
 
-  async function loadPlaylist(playlistId) {
-    try {
-      await postAPI(`/playlists/${playlistId}/play`);
-      const pl = playlists.find(p => p.id === playlistId);
-      if (!pl) return;
-      await loadQueue();
-      toast(`Loaded playlist: ${pl.name}`, 'success');
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
+      async function clearQueue() {
+        try {
+          await postAPI("/queue/clear");
+          queue = [];
+          nowPlaying = null;
+          isPlaying = false;
+          stopProgress();
+          renderQueue();
+          updateNowPlaying();
+          toast("Queue cleared", "info");
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
 
-  function toggleSelect(trackId) {
-    if (selectedIds.has(trackId)) selectedIds.delete(trackId);
-    else selectedIds.add(trackId);
-    updateBulkBar();
-    renderLibrary();
-  }
+      async function loadPlaylist(playlistId) {
+        try {
+          await postAPI(`/playlists/${playlistId}/play`);
+          const pl = playlists.find((p) => p.id === playlistId);
+          if (!pl) return;
+          await loadQueue();
+          toast(`Loaded playlist: ${pl.name}`, "success");
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
 
-  function clearSelection() {
-    selectedIds.clear();
-    updateBulkBar();
-    renderLibrary();
-  }
+      function toggleSelect(trackId) {
+        if (selectedIds.has(trackId)) selectedIds.delete(trackId);
+        else selectedIds.add(trackId);
+        updateBulkBar();
+        renderLibrary();
+      }
 
-  function updateBulkBar() {
-    const bar = document.getElementById('bulk-bar');
-    const count = document.getElementById('bulk-count');
-    if (selectedIds.size > 0) {
-      bar.classList.remove('hidden');
-      count.textContent = `${selectedIds.size} selected`;
-    } else {
-      bar.classList.add('hidden');
-    }
-  }
+      function clearSelection() {
+        selectedIds.clear();
+        updateBulkBar();
+        renderLibrary();
+      }
 
-  function showNewPlaylistModal() {
-    document.getElementById('modal-playlist').classList.remove('hidden');
-    document.getElementById('playlist-name-input').value = '';
-    document.getElementById('playlist-name-input').focus();
-  }
+      function updateBulkBar() {
+        const bar = document.getElementById("bulk-bar");
+        const count = document.getElementById("bulk-count");
+        if (selectedIds.size > 0) {
+          bar.classList.remove("hidden");
+          count.textContent = `${selectedIds.size} selected`;
+        } else {
+          bar.classList.add("hidden");
+        }
+      }
 
-  function closeModal(id) {
-    document.getElementById(id).classList.add('hidden');
-  }
+      function showNewPlaylistModal() {
+        document.getElementById("modal-playlist").classList.remove("hidden");
+        document.getElementById("playlist-name-input").value = "";
+        document.getElementById("playlist-name-input").focus();
+      }
 
-  async function savePlaylist() {
-    const name = prompt('Playlist name:');
-    if (!name || name.trim() === '') return;
-    const tracks = [...selectedIds];
-    if (tracks.length === 0) return toast('Select tracks first', 'error');
-    try {
-      await postAPI('/playlists', { name: name.trim(), trackIds: tracks });
-      selectedIds.clear();
-      updateBulkBar();
-      await loadPlaylists();
-      toast(`Playlist "${name}" created`, 'success');
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
+      function closeModal(id) {
+        document.getElementById(id).classList.add("hidden");
+      }
 
-  function createPlaylistFromSelection() {
-    savePlaylist();
-  }
+      async function savePlaylist() {
+        const name = prompt("Playlist name:");
+        if (!name || name.trim() === "") return;
+        const tracks = [...selectedIds];
+        if (tracks.length === 0) return toast("Select tracks first", "error");
+        try {
+          await postAPI("/playlists", { name: name.trim(), trackIds: tracks });
+          selectedIds.clear();
+          updateBulkBar();
+          await loadPlaylists();
+          toast(`Playlist "${name}" created`, "success");
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
 
-  async function deletePlaylist(playlistId) {
-    try {
-      await deleteAPI(`/playlists/${playlistId}`);
-      playlists = playlists.filter(p => p.id !== playlistId);
-      renderPlaylists();
-      toast('Playlist deleted', 'info');
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
+      function createPlaylistFromSelection() {
+        savePlaylist();
+      }
 
-  // ============================================================
-  //  UPLOAD HANDLING
-  // ============================================================
-  function handleDragOver(e) {
-    e.preventDefault();
-    document.getElementById('drop-zone').classList.add('drag-over');
-  }
+      async function deletePlaylist(playlistId) {
+        try {
+          await deleteAPI(`/playlists/${playlistId}`);
+          playlists = playlists.filter((p) => p.id !== playlistId);
+          renderPlaylists();
+          toast("Playlist deleted", "info");
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
 
-  function handleDragLeave(e) {
-    e.preventDefault();
-    document.getElementById('drop-zone').classList.remove('drag-over');
-  }
+      // ============================================================
+      //  UPLOAD HANDLING
+      // ============================================================
+      function handleDragOver(e) {
+        e.preventDefault();
+        document.getElementById("drop-zone").classList.add("drag-over");
+      }
 
-  function handleDrop(e) {
-    e.preventDefault();
-    document.getElementById('drop-zone').classList.remove('drag-over');
-    handleFiles(e.dataTransfer.files);
-  }
+      function handleDragLeave(e) {
+        e.preventDefault();
+        document.getElementById("drop-zone").classList.remove("drag-over");
+      }
 
-  async function handleFiles(fileList) {
-    const progressEl = document.getElementById('upload-progress');
-    progressEl.classList.remove('hidden');
-    
-    for (const file of fileList) {
-      if (!/\.(mp3|wav|ogg)$/i.test(file.name)) continue;
-      
-      const id = 'upload-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-      const html = `
+      function handleDrop(e) {
+        e.preventDefault();
+        document.getElementById("drop-zone").classList.remove("drag-over");
+        handleFiles(e.dataTransfer.files);
+      }
+
+      async function handleFiles(fileList) {
+        const progressEl = document.getElementById("upload-progress");
+        progressEl.classList.remove("hidden");
+
+        for (const file of fileList) {
+          if (!/\.(mp3|wav|ogg)$/i.test(file.name)) continue;
+
+          const id =
+            "upload-" +
+            Date.now() +
+            "-" +
+            Math.random().toString(36).substr(2, 9);
+          const html = `
         <div id="${id}" class="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/50 animate-fade-in">
           <div class="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
             <svg class="w-5 h-5 text-zinc-500 spin-slow" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
@@ -715,232 +1361,259 @@
           <span class="text-xs text-zinc-500 font-mono" id="${id}-pct">0%</span>
         </div>
       `;
-      progressEl.insertAdjacentHTML('beforeend', html);
+          progressEl.insertAdjacentHTML("beforeend", html);
 
-      try {
-        const bar = document.getElementById(id + '-bar');
-        const pctEl = document.getElementById(id + '-pct');
+          try {
+            const bar = document.getElementById(id + "-bar");
+            const pctEl = document.getElementById(id + "-pct");
 
-        const formData = new FormData();
-        formData.append('file', file);
+            const formData = new FormData();
+            formData.append("file", file);
 
-        await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', '/api/upload');
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              const p = Math.round((e.loaded / e.total) * 100);
-              bar.style.width = p + '%';
-              pctEl.textContent = p + '%';
-            }
-          };
-          xhr.onload = () => {
-            if (xhr.status === 200) {
-              bar.style.width = '100%';
-              pctEl.textContent = 'Done';
-              pctEl.classList.add('text-brand-400');
-              resolve(JSON.parse(xhr.responseText));
-            } else {
-              reject(new Error('Upload failed (' + xhr.status + ')'));
-            }
-          };
-          xhr.onerror = () => reject(new Error('Network error'));
-          xhr.send(formData);
-        });
+            await new Promise((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.open("POST", "/api/upload");
+              xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                  const p = Math.round((e.loaded / e.total) * 100);
+                  bar.style.width = p + "%";
+                  pctEl.textContent = p + "%";
+                }
+              };
+              xhr.onload = () => {
+                if (xhr.status === 200) {
+                  bar.style.width = "100%";
+                  pctEl.textContent = "Done";
+                  pctEl.classList.add("text-brand-400");
+                  resolve(JSON.parse(xhr.responseText));
+                } else {
+                  reject(new Error("Upload failed (" + xhr.status + ")"));
+                }
+              };
+              xhr.onerror = () => reject(new Error("Network error"));
+              xhr.send(formData);
+            });
 
-        toast(`Uploaded: ${file.name}`, 'success');
-        await loadLibrary();
-        
-      } catch (err) {
-        document.getElementById(id + '-pct').textContent = 'Error';
-        document.getElementById(id + '-pct').classList.add('text-red-400');
-        toast(`Upload error: ${err.message}`, 'error');
-      }
-    }
-  }
-
-  // ============================================================
-  //  HELPERS
-  // ============================================================
-  function formatSize(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / 1048576).toFixed(1) + ' MB';
-  }
-
-  function formatTime(totalSecs) {
-    const m = Math.floor(totalSecs / 60);
-    const s = totalSecs % 60;
-    return m + ':' + s.toString().padStart(2, '0');
-  }
-
-  function formatDuration(totalSecs) {
-    const secs = typeof totalSecs === 'number' ? Math.floor(totalSecs) : 0;
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
-
-  function updateNowPlaying() {
-    const npTitle = document.getElementById('np-title');
-    const npStatus = document.getElementById('np-status');
-    const npArt = document.getElementById('np-art');
-    const sidebarNP = document.getElementById('sidebar-now-playing');
-    const sidebarName = document.getElementById('sidebar-track-name');
-    const sidebarStatus = document.getElementById('sidebar-status');
-
-    if (nowPlaying) {
-      npTitle.textContent = nowPlaying.name;
-      npStatus.textContent = isPlaying ? 'Playing' : 'Paused';
-      npArt.innerHTML = '<svg class="w-8 h-8 text-brand-400 ' + (isPlaying ? 'spin-slow' : '') + '" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
-      sidebarNP.classList.remove('hidden');
-      sidebarName.textContent = nowPlaying.name;
-      sidebarStatus.textContent = isPlaying ? 'Playing' : 'Paused';
-    } else {
-      npTitle.textContent = 'No track playing';
-      npStatus.textContent = 'Idle';
-      npArt.innerHTML = '<svg class="w-8 h-8 text-zinc-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
-      sidebarNP.classList.add('hidden');
-    }
-
-    // Play/pause icon toggle
-    document.getElementById('icon-pause').classList.toggle('hidden', !isPlaying);
-    document.getElementById('icon-play').classList.toggle('hidden', isPlaying);
-    renderQueue();
-  }
-
-  function updateProgressUI() {
-    if (totalSeconds > 0) {
-      const pct = (progressSeconds / totalSeconds) * 100;
-      document.getElementById('np-progress').style.width = pct + '%';
-    } else {
-      document.getElementById('np-progress').style.width = '0%';
-    }
-    document.getElementById('np-time-current').textContent = formatTime(progressSeconds);
-    document.getElementById('np-time-total').textContent = formatTime(totalSeconds);
-  }
-
-  function startProgress() {
-    stopProgress();
-    updateProgressUI();
-    progressInterval = setInterval(() => {
-      if (!isPlaying) return;
-      // Sync elapsed from server state on each poll; only increment locally for smooth UI
-      if (totalSeconds > 0) {
-        progressSeconds++;
-        if (progressSeconds >= totalSeconds) {
-          stopProgress();
-          skipForward();
-          return;
+            toast(`Uploaded: ${file.name}`, "success");
+            await loadLibrary();
+          } catch (err) {
+            document.getElementById(id + "-pct").textContent = "Error";
+            document.getElementById(id + "-pct").classList.add("text-red-400");
+            toast(`Upload error: ${err.message}`, "error");
+          }
         }
       }
-      updateProgressUI();
-    }, 1000);
-  }
 
-  function stopProgress() {
-    if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
-  }
-
-  function toast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    const colors = { success: 'bg-brand-500/20 border-brand-500/30 text-brand-300', error: 'bg-red-500/20 border-red-500/30 text-red-300', info: 'bg-zinc-800/80 border-zinc-700/50 text-zinc-300' };
-    const icons = { success: '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>', error: '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>', info: '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>' };
-    const el = document.createElement('div');
-    el.className = `flex items-center gap-2 px-4 py-3 rounded-xl border ${colors[type]} text-sm font-medium shadow-lg animate-slide-down`;
-    el.innerHTML = `${icons[type]} ${message}`;
-    container.appendChild(el);
-    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3000);
-  }
-
-  // ============================================================
-  //  DATA LOADING
-  // ============================================================
-  async function loadLibrary() {
-    try {
-      const res = await fetchAPI('/library');
-      allTracks = res.data || [];
-      filterLibrary();
-    } catch (err) {
-      console.error('Failed to load library:', err);
-      toast('Failed to load library', 'error');
-    }
-  }
-
-  async function addURL() {
-    const urlInput = document.getElementById('url-input');
-    const url = urlInput.value.trim();
-    if (!url) return;
-    
-    try {
-      const res = await postAPI('/library/url', { url });
-      urlInput.value = '';
-      await loadLibrary();
-      toast('Added URL to library', 'success');
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
-
-  async function loadQueue() {
-    try {
-      const res = await fetchAPI('/queue');
-      const data = res.data;
-      queue = data.queue || [];
-      // nowPlaying is null when idle (not {}), so check for name field
-      if (data.nowPlaying && data.nowPlaying.name) {
-        nowPlaying = data.nowPlaying;
-        isPlaying = data.state === 'playing';
-        totalSeconds = data.nowPlaying.total || 0;
-        progressSeconds = data.nowPlaying.elapsed || 0;
-      } else {
-        nowPlaying = null;
-        isPlaying = false;
-        progressSeconds = 0;
-        totalSeconds = 0;
+      // ============================================================
+      //  HELPERS
+      // ============================================================
+      function formatSize(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / 1048576).toFixed(1) + " MB";
       }
-      updateNowPlaying();
-      updateProgressUI();
-      renderQueue();
-    } catch (err) {
-      console.error('Failed to load queue:', err);
-    }
-  }
 
-  async function loadPlaylists() {
-    try {
-      const res = await fetchAPI('/playlists');
-      playlists = res.data || [];
-      renderPlaylists();
-    } catch (err) {
-      console.error('Failed to load playlists:', err);
-    }
-  }
+      function formatTime(totalSecs) {
+        const m = Math.floor(totalSecs / 60);
+        const s = totalSecs % 60;
+        return m + ":" + s.toString().padStart(2, "0");
+      }
 
-  async function loadHistory() {
-    try {
-      const res = await fetchAPI('/history');
-      const history = res.data || [];
-      renderHistory(history);
-    } catch (err) {
-      console.error('Failed to load history:', err);
-    }
-  }
+      function formatDuration(totalSecs) {
+        const secs = typeof totalSecs === "number" ? Math.floor(totalSecs) : 0;
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${m}:${s.toString().padStart(2, "0")}`;
+      }
 
-  function renderHistory(history) {
-    const listEl = document.getElementById('history-list');
-    const emptyEl = document.getElementById('history-empty');
+      function updateNowPlaying() {
+        const npTitle = document.getElementById("np-title");
+        const npStatus = document.getElementById("np-status");
+        const npArt = document.getElementById("np-art");
+        const sidebarNP = document.getElementById("sidebar-now-playing");
+        const sidebarName = document.getElementById("sidebar-track-name");
+        const sidebarStatus = document.getElementById("sidebar-status");
 
-    if (history.length === 0) {
-      listEl.innerHTML = '';
-      emptyEl.classList.remove('hidden');
-      return;
-    }
+        if (nowPlaying) {
+          npTitle.textContent = nowPlaying.name;
+          npStatus.textContent = isPlaying ? "Playing" : "Paused";
+          npArt.innerHTML =
+            '<svg class="w-8 h-8 text-brand-400 ' +
+            (isPlaying ? "spin-slow" : "") +
+            '" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+          sidebarNP.classList.remove("hidden");
+          sidebarName.textContent = nowPlaying.name;
+          sidebarStatus.textContent = isPlaying ? "Playing" : "Paused";
+        } else {
+          npTitle.textContent = "No track playing";
+          npStatus.textContent = "Idle";
+          npArt.innerHTML =
+            '<svg class="w-8 h-8 text-zinc-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+          sidebarNP.classList.add("hidden");
+        }
 
-    emptyEl.classList.add('hidden');
-    listEl.innerHTML = history.map((h, i) => {
-      const timeAgo = getTimeAgo(h.playedAt);
-      return `
+        // Play/pause icon toggle
+        document
+          .getElementById("icon-pause")
+          .classList.toggle("hidden", !isPlaying);
+        document
+          .getElementById("icon-play")
+          .classList.toggle("hidden", isPlaying);
+        renderQueue();
+      }
+
+      function updateProgressUI() {
+        if (totalSeconds > 0) {
+          const pct = (progressSeconds / totalSeconds) * 100;
+          document.getElementById("np-progress").style.width = pct + "%";
+        } else {
+          document.getElementById("np-progress").style.width = "0%";
+        }
+        document.getElementById("np-time-current").textContent =
+          formatTime(progressSeconds);
+        document.getElementById("np-time-total").textContent =
+          formatTime(totalSeconds);
+      }
+
+      function startProgress() {
+        stopProgress();
+        updateProgressUI();
+        progressInterval = setInterval(() => {
+          if (!isPlaying) return;
+          // Sync elapsed from server state on each poll; only increment locally for smooth UI
+          if (totalSeconds > 0) {
+            progressSeconds++;
+            if (progressSeconds >= totalSeconds) {
+              stopProgress();
+              skipForward();
+              return;
+            }
+          }
+          updateProgressUI();
+        }, 1000);
+      }
+
+      function stopProgress() {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
+      }
+
+      function toast(message, type = "info") {
+        const container = document.getElementById("toast-container");
+        const colors = {
+          success: "bg-brand-500/20 border-brand-500/30 text-brand-300",
+          error: "bg-red-500/20 border-red-500/30 text-red-300",
+          info: "bg-zinc-800/80 border-zinc-700/50 text-zinc-300",
+        };
+        const icons = {
+          success:
+            '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
+          error:
+            '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
+          info: '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
+        };
+        const el = document.createElement("div");
+        el.className = `flex items-center gap-2 px-4 py-3 rounded-xl border ${colors[type]} text-sm font-medium shadow-lg animate-slide-down`;
+        el.innerHTML = `${icons[type]} ${message}`;
+        container.appendChild(el);
+        setTimeout(() => {
+          el.style.opacity = "0";
+          el.style.transition = "opacity 0.3s";
+          setTimeout(() => el.remove(), 300);
+        }, 3000);
+      }
+
+      // ============================================================
+      //  DATA LOADING
+      // ============================================================
+      async function loadLibrary() {
+        try {
+          const res = await fetchAPI("/library");
+          allTracks = res.data || [];
+          filterLibrary();
+        } catch (err) {
+          console.error("Failed to load library:", err);
+          toast("Failed to load library", "error");
+        }
+      }
+
+      async function addURL() {
+        const urlInput = document.getElementById("url-input");
+        const url = urlInput.value.trim();
+        if (!url) return;
+
+        try {
+          const res = await postAPI("/library/url", { url });
+          urlInput.value = "";
+          await loadLibrary();
+          toast("Added URL to library", "success");
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
+
+      async function loadQueue() {
+        try {
+          const res = await fetchAPI("/queue");
+          const data = res.data;
+          queue = data.queue || [];
+          // nowPlaying is null when idle (not {}), so check for name field
+          if (data.nowPlaying && data.nowPlaying.name) {
+            nowPlaying = data.nowPlaying;
+            isPlaying = data.state === "playing";
+            totalSeconds = data.nowPlaying.total || 0;
+            progressSeconds = data.nowPlaying.elapsed || 0;
+          } else {
+            nowPlaying = null;
+            isPlaying = false;
+            progressSeconds = 0;
+            totalSeconds = 0;
+          }
+          updateNowPlaying();
+          updateProgressUI();
+          renderQueue();
+        } catch (err) {
+          console.error("Failed to load queue:", err);
+        }
+      }
+
+      async function loadPlaylists() {
+        try {
+          const res = await fetchAPI("/playlists");
+          playlists = res.data || [];
+          renderPlaylists();
+        } catch (err) {
+          console.error("Failed to load playlists:", err);
+        }
+      }
+
+      async function loadHistory() {
+        try {
+          const res = await fetchAPI("/history");
+          const history = res.data || [];
+          renderHistory(history);
+        } catch (err) {
+          console.error("Failed to load history:", err);
+        }
+      }
+
+      function renderHistory(history) {
+        const listEl = document.getElementById("history-list");
+        const emptyEl = document.getElementById("history-empty");
+
+        if (history.length === 0) {
+          listEl.innerHTML = "";
+          emptyEl.classList.remove("hidden");
+          return;
+        }
+
+        emptyEl.classList.add("hidden");
+        listEl.innerHTML = history
+          .map((h, i) => {
+            const timeAgo = getTimeAgo(h.playedAt);
+            return `
         <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/40 hover:bg-zinc-900/70 border border-transparent transition-all duration-200 group">
           <div class="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
             <svg class="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -954,63 +1627,165 @@
           </button>
         </div>
       `;
-    }).join('');
-  }
-
-  async function replayHistory(index) {
-    try {
-      await postAPI('/history/replay', { index });
-      toast('Replaying from history', 'success');
-      await loadQueue();
-    } catch (err) {
-      toast(`Error: ${err.message}`, 'error');
-    }
-  }
-
-  function getTimeAgo(dateStr) {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-
-    if (diffSec < 60) return 'just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHour < 24) return `${diffHour}h ago`;
-    return `${diffDay}d ago`;
-  }
-
-  async function loadStatus() {
-    try {
-      const res = await fetchAPI('/status');
-      const data = res.data;
-      const status = document.getElementById('connection-status');
-      if (data.playing || data.paused) {
-        status.innerHTML = '<span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse-slow"></span><span class="text-brand-400">Connected — Mumble Server</span>';
-      } else {
-        status.innerHTML = '<span class="w-2 h-2 rounded-full bg-zinc-500"></span><span class="text-zinc-500">Idle</span>';
+          })
+          .join("");
       }
-    } catch (err) {
-      const status = document.getElementById('connection-status');
-      status.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500"></span><span class="text-zinc-500">Disconnected</span>';
-    }
-  }
 
-  // ============================================================
-  //  INIT
-  // ============================================================
-  document.addEventListener('DOMContentLoaded', async () => {
-    switchTab('library');
-    await Promise.all([loadLibrary(), loadQueue(), loadPlaylists(), loadHistory(), loadStatus()]);
-    
-    // Poll for queue updates every 2 seconds
-    refreshInterval = setInterval(async () => {
-      await loadQueue();
-      await loadStatus();
-    }, 2000);
-  });
-  </script>
-</body>
+      async function replayHistory(index) {
+        try {
+          await postAPI("/history/replay", { index });
+          toast("Replaying from history", "success");
+          await loadQueue();
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
+
+      function getTimeAgo(dateStr) {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+
+        if (diffSec < 60) return "just now";
+        if (diffMin < 60) return `${diffMin}m ago`;
+        if (diffHour < 24) return `${diffHour}h ago`;
+        return `${diffDay}d ago`;
+      }
+
+      async function loadStatus() {
+        try {
+          const res = await fetchAPI("/status");
+          const data = res.data;
+          const status = document.getElementById("connection-status");
+          if (data.playing || data.paused) {
+            status.innerHTML =
+              '<span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse-slow"></span><span class="text-brand-400">Connected — Mumble Server</span>';
+          } else {
+            status.innerHTML =
+              '<span class="w-2 h-2 rounded-full bg-zinc-500"></span><span class="text-zinc-500">Idle</span>';
+          }
+        } catch (err) {
+          const status = document.getElementById("connection-status");
+          status.innerHTML =
+            '<span class="w-2 h-2 rounded-full bg-red-500"></span><span class="text-zinc-500">Disconnected</span>';
+        }
+      }
+
+      // ============================================================
+      //  INIT
+      // ============================================================
+      document.addEventListener("DOMContentLoaded", async () => {
+        switchTab("library");
+        await Promise.all([
+          loadLibrary(),
+          loadQueue(),
+          loadPlaylists(),
+          loadHistory(),
+          loadStatus(),
+        ]);
+
+        // Poll for queue updates every 2 seconds
+        refreshInterval = setInterval(async () => {
+          await loadQueue();
+          await loadStatus();
+          await loadVolume();
+        }, 2000);
+      });
+
+      // ============================================================
+      //  VOLUME CONTROL
+      // ============================================================
+      async function loadVolume() {
+        try {
+          const res = await fetchAPI("/volume");
+          const data = res.data;
+          // Desktop
+          document.getElementById("volume-slider").value = data.volume;
+          document.getElementById("volume-label").textContent =
+            data.volume + "%";
+          // Mobile
+          const mobileSlider = document.getElementById("volume-slider-mobile");
+          if (mobileSlider) mobileSlider.value = data.volume;
+          const mobileLabel = document.getElementById("volume-label-mobile");
+          if (mobileLabel) mobileLabel.textContent = data.volume + "%";
+          // Icons (both)
+          const isMuted = data.muted || data.volume === 0;
+          document
+            .getElementById("icon-volume-on")
+            .classList.toggle("hidden", isMuted);
+          document
+            .getElementById("icon-volume-off")
+            .classList.toggle("hidden", !isMuted);
+          const mobOn = document.getElementById("icon-volume-on-mobile");
+          const mobOff = document.getElementById("icon-volume-off-mobile");
+          if (mobOn) mobOn.classList.toggle("hidden", isMuted);
+          if (mobOff) mobOff.classList.toggle("hidden", !isMuted);
+        } catch (err) {
+          console.error("Failed to load volume:", err);
+        }
+      }
+
+      async function setVolume(value) {
+        try {
+          await postAPI("/volume", { volume: parseInt(value) });
+          // Desktop
+          document.getElementById("volume-slider").value = value;
+          document.getElementById("volume-label").textContent = value + "%";
+          // Mobile
+          const mobileSlider = document.getElementById("volume-slider-mobile");
+          if (mobileSlider) mobileSlider.value = value;
+          const mobileLabel = document.getElementById("volume-label-mobile");
+          if (mobileLabel) mobileLabel.textContent = value + "%";
+          const isMuted = parseInt(value) === 0;
+          document
+            .getElementById("icon-volume-on")
+            .classList.toggle("hidden", isMuted);
+          document
+            .getElementById("icon-volume-off")
+            .classList.toggle("hidden", !isMuted);
+          const mobOn = document.getElementById("icon-volume-on-mobile");
+          const mobOff = document.getElementById("icon-volume-off-mobile");
+          if (mobOn) mobOn.classList.toggle("hidden", isMuted);
+          if (mobOff) mobOff.classList.toggle("hidden", !isMuted);
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
+
+      async function toggleMute() {
+        try {
+          const slider = document.getElementById("volume-slider");
+          const mobileSlider = document.getElementById("volume-slider-mobile");
+          const currentVol = parseInt(slider.value);
+          if (currentVol === 0) {
+            await postAPI("/volume/unmute");
+            slider.value = 50;
+            if (mobileSlider) mobileSlider.value = 50;
+            await loadVolume();
+          } else {
+            await postAPI("/volume/mute");
+            slider.value = 0;
+            if (mobileSlider) mobileSlider.value = 0;
+            document.getElementById("volume-label").textContent = "0%";
+            const mobLabel = document.getElementById("volume-label-mobile");
+            if (mobLabel) mobLabel.textContent = "0%";
+            document.getElementById("icon-volume-on").classList.add("hidden");
+            document
+              .getElementById("icon-volume-off")
+              .classList.remove("hidden");
+            const mobOn = document.getElementById("icon-volume-on-mobile");
+            const mobOff = document.getElementById("icon-volume-off-mobile");
+            if (mobOn) mobOn.classList.add("hidden");
+            if (mobOff) mobOff.classList.remove("hidden");
+          }
+        } catch (err) {
+          toast(`Error: ${err.message}`, "error");
+        }
+      }
+    </script>
+  </body>
 </html>

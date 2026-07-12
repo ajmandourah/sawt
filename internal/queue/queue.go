@@ -57,6 +57,9 @@ type Manager struct {
 	// Callbacks
 	onStateChange func(State)
 	onTrackChange func(*audio.Track)
+
+	// Volume controller
+	volumeCtrl *audio.VolumeController
 }
 
 // HistoryEntry represents a played track in the history.
@@ -76,6 +79,117 @@ func New(engine *audio.Engine) *Manager {
 		engine: engine,
 		items:  make([]*audio.Track, 0),
 	}
+}
+
+// SetVolumeController attaches a shared VolumeController.
+func (m *Manager) SetVolumeController(ctrl *audio.VolumeController) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.volumeCtrl = ctrl
+}
+
+// Volume returns the current volume percentage (0–200).
+func (m *Manager) Volume() int {
+	m.mu.RLock()
+	ctrl := m.volumeCtrl
+	m.mu.RUnlock()
+	if ctrl == nil {
+		return audio.DefaultVolume
+	}
+	return int(ctrl.GetVolume())
+}
+
+// SetVolume sets the volume to a percentage (0–200). Clamps and returns actual.
+func (m *Manager) SetVolume(pct int) int {
+	m.mu.RLock()
+	ctrl := m.volumeCtrl
+	m.mu.RUnlock()
+	if ctrl == nil {
+		return audio.DefaultVolume
+	}
+	return int(ctrl.SetVolume(float64(pct)))
+}
+
+// Mute sets volume to 0%.
+func (m *Manager) Mute() {
+	m.mu.RLock()
+	ctrl := m.volumeCtrl
+	m.mu.RUnlock()
+	if ctrl != nil {
+		ctrl.Mute()
+	}
+}
+
+// Unmute restores volume to 100%.
+func (m *Manager) Unmute() {
+	m.mu.RLock()
+	ctrl := m.volumeCtrl
+	m.mu.RUnlock()
+	if ctrl != nil {
+		ctrl.Unmute()
+	}
+}
+
+// IsMuted returns true if volume is at 0%.
+func (m *Manager) IsMuted() bool {
+	m.mu.RLock()
+	ctrl := m.volumeCtrl
+	m.mu.RUnlock()
+	if ctrl == nil {
+		return false
+	}
+	return ctrl.IsMuted()
+}
+
+// SaveVolume persists the current volume to a JSON file.
+func (m *Manager) SaveVolume(path string) error {
+	m.mu.RLock()
+	ctrl := m.volumeCtrl
+	m.mu.RUnlock()
+	if ctrl == nil {
+		return nil
+	}
+	type volData struct {
+		Volume int `json:"volume"`
+	}
+	data, err := json.MarshalIndent(volData{Volume: int(ctrl.GetVolume())}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// LoadVolume loads the persisted volume from a JSON file.
+func (m *Manager) LoadVolume(path string) error {
+	m.mu.RLock()
+	ctrl := m.volumeCtrl
+	m.mu.RUnlock()
+	if ctrl == nil {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // no file yet, use default
+		}
+		return err
+	}
+	if len(data) == 0 {
+		return nil
+	}
+
+	type volData struct {
+		Volume int `json:"volume"`
+	}
+	var v volData
+	if err := json.Unmarshal(data, &v); err != nil {
+		log.Printf("Queue: corrupt volume file %s, using default", path)
+		return nil
+	}
+	ctrl.SetVolume(float64(v.Volume))
+	log.Printf("Queue: loaded volume %d%% from %s", v.Volume, path)
+	return nil
 }
 
 // SetStateChangeCallback sets a callback for state changes.

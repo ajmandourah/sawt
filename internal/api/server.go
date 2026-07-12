@@ -102,6 +102,12 @@ func (s *Server) registerRoutes() {
 	// Status
 	s.mux.HandleFunc("GET /api/status", s.handleStatus)
 
+	// Volume
+	s.mux.HandleFunc("GET /api/volume", s.handleGetVolume)
+	s.mux.HandleFunc("POST /api/volume", s.handleSetVolume)
+	s.mux.HandleFunc("POST /api/volume/mute", s.handleMute)
+	s.mux.HandleFunc("POST /api/volume/unmute", s.handleUnmute)
+
 	// Queue control
 	s.mux.HandleFunc("GET /api/queue", s.handleGetQueue)
 	s.mux.HandleFunc("POST /api/play", s.handlePlayNow)
@@ -186,6 +192,41 @@ func (s *Server) handleSearchLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 	tracks := s.store.SearchTracks(q)
 	writeOK(w, tracks)
+}
+
+// ---- Volume Handlers ----
+
+func (s *Server) handleGetVolume(w http.ResponseWriter, r *http.Request) {
+	writeOK(w, map[string]any{
+		"volume": s.qm.Volume(),
+		"muted":  s.qm.IsMuted(),
+	})
+}
+
+func (s *Server) handleSetVolume(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Volume int `json:"volume"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Volume < 0 || req.Volume > 200 {
+		writeError(w, http.StatusBadRequest, "volume must be 0-200")
+		return
+	}
+	actual := s.qm.SetVolume(req.Volume)
+	writeOK(w, map[string]any{"volume": actual})
+}
+
+func (s *Server) handleMute(w http.ResponseWriter, r *http.Request) {
+	s.qm.Mute()
+	writeOK(w, map[string]any{"muted": true})
+}
+
+func (s *Server) handleUnmute(w http.ResponseWriter, r *http.Request) {
+	s.qm.Unmute()
+	writeOK(w, map[string]any{"muted": false})
 }
 
 // ---- Status Handler ----
