@@ -1,0 +1,30 @@
+# Sawt (صوت) — Mumble Music Bot Configuration
+# Copy this file to config.yaml and edit the values.
+# CLI flags always override config file values.
+
+# Mumble server connection
+server: "127.0.0.1:64738"
+username: "Sawt Bot"
+password: ""
+channel: "Music"
+
+# TLS (optional, uncomment to enable)
+# tls-cert: "/path/to/cert.pem"
+# tls-key: "/path/to/key.pem"
+
+# Audio
+music-dir: "./music"
+stereo: false
+jitter: false
+jitter-delay: 100
+buffer: 128
+
+# Commands
+prefix: "!"
+
+# Web UI
+# webui-port: 7071
+# webui-addr: "0.0.0.0"
+
+# Data directory (playlists, history, URLs, yt-dlp binary)
+# data-dir: "./data"

@@ -101,6 +101,24 @@ services:
 docker compose up -d
 ```
 
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SERVER` | (none) | Mumble server address (host:port) |
+| `USERNAME` | "Sawt Bot" | Bot username |
+| `PASSWORD` | "" | Server password |
+| `CHANNEL` | "Music" | Channel to join on connect |
+| `PREFIX` | "!" | Command prefix in Mumble chat |
+| `STEREO` | "false" | Enable stereo audio (requires Mumble 1.4.0+) |
+| `JITTER` | "false" | Enable jitter buffer for smoother playback |
+| `JITTER_DELAY` | "100" | Jitter buffer delay in milliseconds |
+| `BUFFER` | "128" | Audio buffer size in frames |
+| `WEBUI_PORT` | "7071" | Port for the web interface |
+| `WEBUI_ADDR` | "0.0.0.0" | Bind address for web UI |
+
+> **Note:** yt-dlp is auto-managed and downloaded from GitHub on first run. No `YTDLP` variable needed.
+
 ---
 
 ## Configuration
