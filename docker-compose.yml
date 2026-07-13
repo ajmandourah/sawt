@@ -1,6 +1,6 @@
 services:
   sawt:
-    build: .
+    image: ghcr.io/ajmandourah/sawt:latest
     container_name: sawt
     restart: unless-stopped
     ports:

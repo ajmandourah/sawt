@@ -62,6 +62,22 @@ The binary embeds the web UI, so no separate static file serving is needed.
 
 ### Docker
 
+**Pre-built image (recommended):**
+
+```bash
+docker pull ghcr.io/ajmandourah/sawt:latest
+docker run -d --name sawt \
+  -v /path/to/music:/music:ro \
+  -v /path/to/data:/data \
+  -e SERVER=your-server:64738 \
+  -e USERNAME=SawtBot \
+  -e PASSWORD=yourpassword \
+  -e CHANNEL=Music \
+  ghcr.io/ajmandourah/sawt:latest
+```
+
+**Build from source:**
+
 ```bash
 docker build -t sawt .
 docker run -d --name sawt \
@@ -77,6 +93,29 @@ docker run -d --name sawt \
 See [Docker Configuration](#docker-configuration) for all environment variables.
 
 ### Docker Compose
+
+**Using the pre-built GHCR image (recommended):**
+
+```yaml
+# docker-compose.yml
+services:
+  sawt:
+    image: ghcr.io/ajmandourah/sawt:latest
+    container_name: sawt
+    restart: unless-stopped
+    ports:
+      - "7071:7071"
+    volumes:
+      - ./music:/music:ro
+      - ./data:/data
+    environment:
+      - SERVER=your-server:64738
+      - USERNAME=SawtBot
+      - PASSWORD=yourpassword
+      - CHANNEL=Music
+```
+
+**Build from source:**
 
 ```yaml
 # docker-compose.yml
