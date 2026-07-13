@@ -3,10 +3,6 @@ name: Build and Push to GHCR
 on:
   release:
     types: [published]
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -41,8 +37,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value={{version}},enable={{is_release}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - name: Build and push
         uses: docker/build-push-action@v6
