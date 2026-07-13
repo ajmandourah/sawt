@@ -59,4 +59,3 @@ USER sawt
 EXPOSE 7071
 
 ENTRYPOINT ["/app/sawt"]
-CMD ["-music-dir", "/music", "-data-dir", "/data", "-webui-port", "7071", "-webui-addr", "0.0.0.0"]
