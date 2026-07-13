@@ -315,7 +315,7 @@
               min="0"
               max="200"
               value="50"
-              class="flex-1 h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer"
+              class="flex-1 h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer w-1"
               oninput="setVolume(this.value)"
             />
             <span
@@ -754,7 +754,7 @@
               min="0"
               max="200"
               value="50"
-              class="flex-1 h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer"
+              class="flex-1 h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer w-1"
               oninput="setVolume(this.value)"
             />
             <span
@@ -1539,18 +1539,49 @@
         }
       }
 
+      // Double-click prevention for URL add
+      let urlAddLocked = false;
+      const URL_ADD_COOLDOWN = 3000; // ms
+
       async function addURL() {
         const urlInput = document.getElementById("url-input");
         const url = urlInput.value.trim();
-        if (!url) return;
+        if (!url || urlAddLocked) return;
+
+        urlAddLocked = true;
+        const btn = document.querySelector('[onclick="addURL()"]');
+        if (btn) {
+          btn.disabled = true;
+          btn.classList.add("opacity-50", "cursor-not-allowed");
+        }
+
+        // Detect source type from URL
+        const isSoundCloud = /soundcloud\.com/i.test(url);
+        const isYouTube = /youtube\.com|youtu\.be/i.test(url);
+        const isDirectStream = /\.(mp3|ogg|wav|flac)(\?|$)/i.test(url);
+        let sourceLabel = "link";
+        if (isSoundCloud) sourceLabel = "SoundCloud";
+        else if (isYouTube) sourceLabel = "YouTube";
+        else if (isDirectStream) sourceLabel = "direct stream";
+
+        toast(`Parsing ${sourceLabel} link…`, "info");
 
         try {
           const res = await postAPI("/library/url", { url });
+          toast("Processing link…", "info");
           urlInput.value = "";
           await loadLibrary();
-          toast("Added URL to library", "success");
+          toast("Added successfully", "success");
         } catch (err) {
           toast(`Error: ${err.message}`, "error");
+        } finally {
+          setTimeout(() => {
+            urlAddLocked = false;
+            if (btn) {
+              btn.disabled = false;
+              btn.classList.remove("opacity-50", "cursor-not-allowed");
+            }
+          }, URL_ADD_COOLDOWN);
         }
       }
 
