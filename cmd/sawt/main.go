@@ -136,6 +136,26 @@ func main() {
 	// and Self.Session/channel tree are fully populated.
 	client.JoinChannel(cfg.Channel)
 
+	// Set the bot's comment (hover text) to the help message.
+	client.Self().Comment = `<b><font color="#7cfc00">Sawt (صوت)</font></b> — Mumble Music Bot<br><br>
+<b>Commands:</b><br>
+<b>` + cfg.Prefix + `help</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Show this help message<br>
+<b>` + cfg.Prefix + `ping</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Check if bot is alive<br>
+<b>` + cfg.Prefix + `play &lt;src&gt;</b>&nbsp;&nbsp;&nbsp;Play a file, URL, or directory<br>
+<b>` + cfg.Prefix + `stop</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Stop playback and clear queue<br>
+<b>` + cfg.Prefix + `skip</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Skip to next track<br>
+<b>` + cfg.Prefix + `pause</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Pause playback<br>
+<b>` + cfg.Prefix + `resume</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Resume playback<br>
+<b>` + cfg.Prefix + `queue</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Show current queue<br>
+<b>` + cfg.Prefix + `nowplaying</b>&nbsp;&nbsp;Show current track<br>
+<b>` + cfg.Prefix + `volume</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Set volume 0–200 (default: 50)<br>
+<b>` + cfg.Prefix + `mute</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Mute audio<br>
+<b>` + cfg.Prefix + `unmute</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Unmute audio<br>
+<b>` + cfg.Prefix + `vol+</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Increase volume by 10<br>
+<b>` + cfg.Prefix + `vol-</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Decrease volume by 10<br>
+<br>
+<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>`
+
 	// Send welcome message to the channel.
 	welcomeMsg := fmt.Sprintf(
 		`<b><font color="#7cfc00">Sawt (صوت)</font></b> — Mumble Music Bot<br><br>
