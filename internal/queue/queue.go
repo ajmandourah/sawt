@@ -375,7 +375,7 @@ func (m *Manager) Stop() {
 	m.emitStateChange()
 }
 
-// Pause pauses playback by saving the current track and stopping the engine.
+// Pause pauses playback without stopping FFmpeg.
 func (m *Manager) Pause() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -384,16 +384,12 @@ func (m *Manager) Pause() {
 		return
 	}
 
-	// Save current track so Resume can restart it
-	m.pausedTrack = m.curr
-
-	// Stop the engine
-	m.stopCurrent()
+	m.engine.Pause()
 	m.state = StatePaused
 	m.emitStateChange()
 }
 
-// Resume resumes playback by restarting the saved track.
+// Resume resumes playback from the same position.
 func (m *Manager) Resume() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -402,35 +398,9 @@ func (m *Manager) Resume() {
 		return
 	}
 
-	if m.pausedTrack == nil {
-		m.state = StateIdle
-		m.emitStateChange()
-		return
-	}
-
-	// Restart the paused track
-	m.curr = m.pausedTrack
-	m.pausedTrack = nil
-	m.trackStartedAt = time.Now()
-	m.trackDuration = 0
-
-	// Prefix yt-dlp sources
-	playSource := m.curr.Source
-	if m.curr.SourceType == source.SourceYtDlp {
-		playSource = "ytdlp:" + m.curr.Source
-	}
-
-	if err := m.engine.Start(playSource); err != nil {
-		log.Printf("Failed to resume track %q: %v", m.curr.Title, err)
-		m.curr = nil
-		m.state = StateIdle
-		m.emitStateChange()
-		return
-	}
-
+	m.engine.Resume()
 	m.state = StatePlaying
 	m.emitStateChange()
-	m.emitTrackChange()
 }
 
 func (m *Manager) stopCurrent() {

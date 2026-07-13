@@ -69,6 +69,9 @@ type Engine struct {
 
 	// Volume controller (applied to sink before sending to Mumble)
 	volumeCtrl *VolumeController
+
+	// Pause state
+	paused bool
 }
 
 // New creates a new Engine ready to play.
@@ -339,8 +342,13 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 					e.waitFFmpeg()
 					return
 				}
-				e.sink.SendAudio(pcm)
-				frameCount++
+				if e.paused {
+					// Paused: consume frame but send silence to keep timing
+					e.sink.SendAudio(e.silence[:])
+				} else {
+					e.sink.SendAudio(pcm)
+					frameCount++
+				}
 			default:
 				// No frame available, send silence
 				e.sink.SendAudio(e.silence[:])
@@ -414,6 +422,21 @@ func (e *Engine) Stop() {
 // (track ends) or is stopped.
 func (e *Engine) Done() <-chan struct{} {
 	return e.doneCh
+}
+
+// Pause pauses audio output without stopping FFmpeg.
+// The reader continues filling the buffer, but frames are discarded.
+func (e *Engine) Pause() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.paused = true
+}
+
+// Resume resumes audio output.
+func (e *Engine) Resume() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.paused = false
 }
 
 // VolumeController returns the engine's shared volume controller.
