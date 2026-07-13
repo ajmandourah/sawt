@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -29,10 +28,6 @@ import (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.SetOutput(os.Stderr)
-
-	// Register WebUI flags before config.Load() (which calls flag.Parse())
-	webuiPort := flag.Int("webui-port", 7071, "Port for the WebUI server")
-	webuiAddr := flag.String("webui-addr", "0.0.0.0", "Bind address for the WebUI server (e.g., 0.0.0.0, localhost, 127.0.0.1)")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -113,8 +108,8 @@ func main() {
 
 	// Create and start the WebUI server
 	webuiSrv := api.New(api.Config{
-		Port:        *webuiPort,
-		Addr:        *webuiAddr,
+		Port:        cfg.WebUIPort,
+		Addr:        cfg.WebUIAddr,
 		Store:       apiStore,
 		QueueMgr:    qm,
 		Engine:      engine,

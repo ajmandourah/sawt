@@ -36,6 +36,10 @@ type Config struct {
 	JitterBuf    bool // enable jitter buffer for smoother playback
 	JitterDelay  int  // jitter buffer delay in ms (default: 100)
 	BufferFrames int  // audio buffer size in frames (default: 128)
+
+	// Web UI
+	WebUIPort int    // port for the web interface (default: 7071)
+	WebUIAddr string // bind address for the web interface (default: "0.0.0.0")
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -51,21 +55,26 @@ func DefaultConfig() *Config {
 		JitterBuf:    false,
 		JitterDelay:  100,
 		BufferFrames: 128,
+		WebUIPort:    7071,
+		WebUIAddr:    "0.0.0.0",
 	}
 }
 
-// Load parses CLI flags and an optional YAML config file.
-// Flags take precedence over file values.
+// Load parses CLI flags, environment variables, and an optional YAML config file.
+// Priority (highest to lowest): CLI flags > env vars > YAML file > defaults.
 func Load() (*Config, error) {
 	cfg := DefaultConfig()
+
+	// Apply environment variables (override defaults)
+	applyEnv(cfg)
 
 	// CLI flags
 	flagServer := flag.String("server", cfg.Server, "Mumble server address (host:port)")
 	flagUser := flag.String("user", cfg.Username, "Bot username")
-	flagPass := flag.String("pass", "", "Server password")
+	flagPass := flag.String("pass", cfg.Password, "Server password")
 	flagCh := flag.String("channel", cfg.Channel, "Channel to join")
-	flagCert := flag.String("cert", "", "Path to TLS certificate")
-	flagKey := flag.String("key", "", "Path to TLS private key")
+	flagCert := flag.String("cert", cfg.TLSCert, "Path to TLS certificate")
+	flagKey := flag.String("key", cfg.TLSKey, "Path to TLS private key")
 	flagMusic := flag.String("music-dir", cfg.MusicDir, "Directory with local music files")
 	flagData := flag.String("data-dir", cfg.DataDir, "Directory for persistence files")
 	flagPrefix := flag.String("prefix", cfg.Prefix, "Command prefix character")
@@ -73,6 +82,8 @@ func Load() (*Config, error) {
 	flagJitter := flag.Bool("jitter", cfg.JitterBuf, "Enable jitter buffer")
 	flagJitterDelay := flag.Int("jitter-delay", cfg.JitterDelay, "Jitter buffer delay in ms")
 	flagBuffer := flag.Int("buffer", cfg.BufferFrames, "Audio buffer size in frames")
+	flagWebPort := flag.Int("webui-port", cfg.WebUIPort, "Port for the WebUI server")
+	flagWebAddr := flag.String("webui-addr", cfg.WebUIAddr, "Bind address for the WebUI server")
 	flagConfig := flag.String("config", "", "Path to YAML config file")
 	flag.Parse()
 
@@ -83,14 +94,10 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Apply CLI flags (they override file values)
+	// Apply CLI flags (they override everything)
 	cfg.Server = *flagServer
 	cfg.Username = *flagUser
-	if *flagPass != "" {
-		cfg.Password = *flagPass
-	} else {
-		cfg.Password = cfg.Password // keep from YAML if set
-	}
+	cfg.Password = *flagPass
 	cfg.Channel = *flagCh
 	cfg.TLSCert = *flagCert
 	cfg.TLSKey = *flagKey
@@ -101,6 +108,8 @@ func Load() (*Config, error) {
 	cfg.JitterBuf = *flagJitter
 	cfg.JitterDelay = *flagJitterDelay
 	cfg.BufferFrames = *flagBuffer
+	cfg.WebUIPort = *flagWebPort
+	cfg.WebUIAddr = *flagWebAddr
 
 	// Validate
 	if err := cfg.validate(); err != nil {
@@ -108,6 +117,61 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// applyEnv reads environment variables and applies them to the config.
+func applyEnv(cfg *Config) {
+	if v := os.Getenv("SERVER"); v != "" {
+		cfg.Server = v
+	}
+	if v := os.Getenv("USERNAME"); v != "" {
+		cfg.Username = v
+	}
+	if v := os.Getenv("PASSWORD"); v != "" {
+		cfg.Password = v
+	}
+	if v := os.Getenv("CHANNEL"); v != "" {
+		cfg.Channel = v
+	}
+	if v := os.Getenv("TLS_CERT"); v != "" {
+		cfg.TLSCert = v
+	}
+	if v := os.Getenv("TLS_KEY"); v != "" {
+		cfg.TLSKey = v
+	}
+	if v := os.Getenv("MUSIC_DIR"); v != "" {
+		cfg.MusicDir = v
+	}
+	if v := os.Getenv("DATA_DIR"); v != "" {
+		cfg.DataDir = v
+	}
+	if v := os.Getenv("PREFIX"); v != "" {
+		cfg.Prefix = v
+	}
+	if v := os.Getenv("STEREO"); v != "" {
+		cfg.Stereo = v == "true" || v == "1"
+	}
+	if v := os.Getenv("JITTER"); v != "" {
+		cfg.JitterBuf = v == "true" || v == "1"
+	}
+	if v := os.Getenv("JITTER_DELAY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.JitterDelay = n
+		}
+	}
+	if v := os.Getenv("BUFFER"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.BufferFrames = n
+		}
+	}
+	if v := os.Getenv("WEBUI_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.WebUIPort = n
+		}
+	}
+	if v := os.Getenv("WEBUI_ADDR"); v != "" {
+		cfg.WebUIAddr = v
+	}
 }
 
 func loadYAML(cfg *Config, path string) error {
