@@ -27,9 +27,7 @@ Thumbs.db
 *.log
 
 # Data (persisted at runtime, not tracked)
-data/
 data/*
-!data/.gitkeep
 
 # Music (user-provided content)
 music/
