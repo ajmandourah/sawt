@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,8 @@ import (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.SetOutput(os.Stderr)
+
+	version := gitVersion()
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -85,7 +88,7 @@ func main() {
 
 	// Setup command dispatcher
 	dispatcher := command.New(cfg.Prefix)
-	setupCommands(dispatcher, client, qm, chain, cfg)
+	setupCommands(dispatcher, client, qm, chain, cfg, version)
 
 	// Register text handler
 	client.SetTextHandler(func(user *gumble.User, message string) {
@@ -110,6 +113,7 @@ func main() {
 	webuiSrv := api.New(api.Config{
 		Port:        cfg.WebUIPort,
 		Addr:        cfg.WebUIAddr,
+		Version:     version,
 		Store:       apiStore,
 		QueueMgr:    qm,
 		Engine:      engine,
@@ -124,7 +128,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("Sawt is online and listening for commands (prefix: %s)", cfg.Prefix)
+	log.Printf("Sawt v%s is online and listening for commands (prefix: %s)", version, cfg.Prefix)
 
 	// --- Join the target channel as the VERY LAST step ---
 	// All initialization is complete, the readRoutine has drained its buffer,
@@ -132,7 +136,11 @@ func main() {
 	client.JoinChannel(cfg.Channel)
 
 	// Set the bot's comment (hover text) to the help message.
-	client.Self().Comment = `<b><font color="#7cfc00">Sawt (صوت)</font></b> — Mumble Music Bot<br><br>
+	webuiLink := ""
+	if cfg.WebUIURL != "" {
+		webuiLink = `<br><br><a href="` + cfg.WebUIURL + `">Web Interface</a>`
+	}
+	client.Self().Comment = `<b><font color="#7cfc00">Sawt (صوت) v` + version + `</font></b> — Mumble Music Bot<br><br>
 <b>Commands:</b><br>
 <b>` + cfg.Prefix + `help</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Show this help message<br>
 <b>` + cfg.Prefix + `ping</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Check if bot is alive<br>
@@ -149,14 +157,18 @@ func main() {
 <b>` + cfg.Prefix + `vol+</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Increase volume by 10<br>
 <b>` + cfg.Prefix + `vol-</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Decrease volume by 10<br>
 <br>
-<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>`
+<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>` + webuiLink
 
 	// Send welcome message to the channel.
+	webuiWelcome := ""
+	if cfg.WebUIURL != "" {
+		webuiWelcome = `<br><a href="` + cfg.WebUIURL + `">Web Interface</a>`
+	}
 	welcomeMsg := fmt.Sprintf(
-		`<b><font color="#7cfc00">Sawt (صوت)</font></b> — Mumble Music Bot<br><br>
+		`<b><font color="#7cfc00">Sawt (صوت) v%s</font></b> — Mumble Music Bot<br><br>
 I'm online and ready to play music! Use <b>%splay &lt;track&gt;</b> to start.<br><br>
-<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>`,
-		cfg.Prefix)
+<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>`+webuiWelcome,
+		version, cfg.Prefix)
 	client.SendMessage(welcomeMsg)
 
 	// Periodically save URLs and volume
@@ -193,11 +205,26 @@ I'm online and ready to play music! Use <b>%splay &lt;track&gt;</b> to start.<br
 	os.Exit(0)
 }
 
-func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manager, chain *source.Chain, cfg *config.Config) {
+// gitVersion reads the version from git describe --tags.
+// Falls back to "dev" if git is unavailable or not a repo.
+func gitVersion() string {
+	cmd := exec.Command("git", "describe", "--tags", "--always", "--dirty", "--abbrev=7")
+	out, err := cmd.Output()
+	if err != nil {
+		return "dev"
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manager, chain *source.Chain, cfg *config.Config, version string) {
 	// !help
 	d.Register("help", func(user *gumble.User, action *command.Action) string {
 		p := cfg.Prefix
-		return `<b><font color="#7cfc00">Sawt (صوت)</font></b> — Mumble Music Bot<br><br>
+		webuiLink := ""
+		if cfg.WebUIURL != "" {
+			webuiLink = `<br><br><a href="` + cfg.WebUIURL + `">Web Interface</a>`
+		}
+		return `<b><font color="#7cfc00">Sawt (صوت) v` + version + `</font></b> — Mumble Music Bot<br><br>
 <b>Commands:</b><br>
 <b>` + p + `help</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Show this help message<br>
 <b>` + p + `ping</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Check if bot is alive<br>
@@ -214,7 +241,7 @@ func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manag
 <b>` + p + `vol+</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Increase volume by 10<br>
 <b>` + p + `vol-</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Decrease volume by 10<br>
 <br>
-<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>`
+<a href="https://github.com/ajmandourah/sawt">GitHub Repo</a> · <a href="https://github.com/ajmandourah/sawt/issues">Report Issues</a>` + webuiLink
 	})
 
 	// !play
@@ -229,7 +256,12 @@ func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manag
 
 		// Try directory first
 		if config.IsDirectory(input) {
-			return handleDirResolve(ctx, user, input, chain, qm)
+			result := handleDirResolve(ctx, user, input, chain, qm)
+			// Auto-play if idle after enqueuing directory
+			if qm.State() == queue.StateIdle {
+				qm.PlayQueue()
+			}
+			return result
 		}
 
 		// Resolve through the chain
@@ -245,6 +277,12 @@ func setupCommands(d *command.Dispatcher, client *mumble.Client, qm *queue.Manag
 			RequestedBy: user.Name,
 		}
 		qm.Enqueue(track)
+
+		// Auto-play if idle (nothing currently playing)
+		if qm.State() == queue.StateIdle {
+			qm.PlayQueue()
+		}
+
 		return fmt.Sprintf("▶ Playing: %s", resolved.Title)
 	})
 

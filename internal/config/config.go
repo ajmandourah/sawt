@@ -40,6 +40,7 @@ type Config struct {
 	// Web UI
 	WebUIPort int    // port for the web interface (default: 7071)
 	WebUIAddr string // bind address for the web interface (default: "0.0.0.0")
+	WebUIURL  string // public URL shown in welcome/help messages (e.g. "http://localhost:7071")
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -57,6 +58,7 @@ func DefaultConfig() *Config {
 		BufferFrames: 128,
 		WebUIPort:    7071,
 		WebUIAddr:    "0.0.0.0",
+		WebUIURL:     "",
 	}
 }
 
@@ -84,6 +86,7 @@ func Load() (*Config, error) {
 	flagBuffer := flag.Int("buffer", cfg.BufferFrames, "Audio buffer size in frames")
 	flagWebPort := flag.Int("webui-port", cfg.WebUIPort, "Port for the WebUI server")
 	flagWebAddr := flag.String("webui-addr", cfg.WebUIAddr, "Bind address for the WebUI server")
+	flagWebURL := flag.String("webui-url", cfg.WebUIURL, "Public URL shown in welcome/help messages")
 	flagConfig := flag.String("config", "", "Path to YAML config file")
 	flag.Parse()
 
@@ -110,6 +113,7 @@ func Load() (*Config, error) {
 	cfg.BufferFrames = *flagBuffer
 	cfg.WebUIPort = *flagWebPort
 	cfg.WebUIAddr = *flagWebAddr
+	cfg.WebUIURL = *flagWebURL
 
 	// Validate
 	if err := cfg.validate(); err != nil {
@@ -171,6 +175,9 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("WEBUI_ADDR"); v != "" {
 		cfg.WebUIAddr = v
+	}
+	if v := os.Getenv("WEBUI_URL"); v != "" {
+		cfg.WebUIURL = v
 	}
 }
 

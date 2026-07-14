@@ -29,6 +29,7 @@ var staticFiles embed.FS
 type Server struct {
 	port        int
 	addr        string
+	version     string
 	store       *store.Store
 	qm          *queue.Manager
 	engine      *audio.Engine
@@ -42,6 +43,7 @@ type Server struct {
 type Config struct {
 	Port        int
 	Addr        string // bind address (default: ":" for all interfaces)
+	Version     string // application version string
 	Store       *store.Store
 	QueueMgr    *queue.Manager
 	Engine      *audio.Engine
@@ -59,6 +61,7 @@ func New(cfg Config) *Server {
 	s := &Server{
 		port:        cfg.Port,
 		addr:        addr,
+		version:     cfg.Version,
 		store:       cfg.Store,
 		qm:          cfg.QueueMgr,
 		engine:      cfg.Engine,
@@ -240,6 +243,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"idle":     state == "idle",
 		"queueLen": s.qm.QueueLength(),
 		"engine":   map[string]bool{"running": s.engine.IsPlaying()},
+		"version":  s.version,
 	})
 }
 

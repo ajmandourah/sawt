@@ -343,6 +343,8 @@
               class="hover:text-brand-400 transition-colors duration-200"
               >Issues</a
             >
+            <span>·</span>
+            <span id="version-tag" class="text-zinc-600 font-mono"></span>
           </div>
         </div>
       </aside>
@@ -1692,17 +1694,30 @@
           const res = await fetchAPI("/status");
           const data = res.data;
           const status = document.getElementById("connection-status");
+          const dot = status.children[0];
+          const label = status.children[1];
           if (data.playing || data.paused) {
-            status.innerHTML =
-              '<span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse-slow"></span><span class="text-brand-400">Connected — Mumble Server</span>';
+            dot.className =
+              "w-2 h-2 rounded-full bg-brand-500 animate-pulse-slow";
+            label.className = "text-brand-400";
+            label.textContent = "Connected — Mumble Server";
           } else {
-            status.innerHTML =
-              '<span class="w-2 h-2 rounded-full bg-zinc-500"></span><span class="text-zinc-500">Idle</span>';
+            dot.className = "w-2 h-2 rounded-full bg-zinc-500";
+            label.className = "text-zinc-500";
+            label.textContent = "Idle";
+          }
+          // Show version in sidebar footer
+          if (data.version) {
+            const verEl = document.getElementById("version-tag");
+            if (verEl) verEl.textContent = data.version;
           }
         } catch (err) {
           const status = document.getElementById("connection-status");
-          status.innerHTML =
-            '<span class="w-2 h-2 rounded-full bg-red-500"></span><span class="text-zinc-500">Disconnected</span>';
+          const dot = status.children[0];
+          const label = status.children[1];
+          dot.className = "w-2 h-2 rounded-full bg-red-500";
+          label.className = "text-zinc-500";
+          label.textContent = "Disconnected";
         }
       }
 
