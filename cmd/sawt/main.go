@@ -49,23 +49,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Connect to Mumble
-	client, err := mumble.New(cfg)
-	if err != nil {
-		log.Fatalf("Mumble connection failed: %v", err)
-	}
-
-	// Create audio engine
-	engine := audio.New(client, cfg.Stereo, cfg.JitterBuf, cfg.JitterDelay, cfg.BufferFrames)
-
-	// Create queue manager
-	qm := queue.New(engine)
-	qm.LoadHistory(filepath.Join(cfg.DataDir, "history.json"))
-
-	// Attach shared volume controller
-	qm.SetVolumeController(engine.VolumeController())
-	qm.LoadVolume(filepath.Join(cfg.DataDir, "volume.json"))
-
 	// Ensure yt-dlp binary is available (downloads from GitHub if missing).
 	ytDlpManager := source.NewManager(cfg.DataDir)
 	if err := ytDlpManager.EnsureAvailable(); err != nil {
@@ -75,6 +58,23 @@ func main() {
 		// Start daily update check (first check after 1 hour, then every 24h).
 		ytDlpManager.RunDailyUpdate(ctx)
 	}
+
+	// Connect to Mumble
+	client, err := mumble.New(cfg)
+	if err != nil {
+		log.Fatalf("Mumble connection failed: %v", err)
+	}
+
+	// Create audio engine
+	engine := audio.New(client, cfg.Stereo, cfg.JitterBuf, cfg.JitterDelay, cfg.BufferFrames, ytDlpManager.BinaryPath())
+
+	// Create queue manager
+	qm := queue.New(engine)
+	qm.LoadHistory(filepath.Join(cfg.DataDir, "history.json"))
+
+	// Attach shared volume controller
+	qm.SetVolumeController(engine.VolumeController())
+	qm.LoadVolume(filepath.Join(cfg.DataDir, "volume.json"))
 
 	// Create source resolver chain (order matters):
 	// 1. LocalResolver — files & directories
@@ -119,6 +119,7 @@ func main() {
 		Engine:      engine,
 		MusicDir:    cfg.MusicDir,
 		ProbeCmd:    "ffprobe",
+		YtDlpPath:   ytDlpManager.BinaryPath(),
 		SourceChain: chain,
 	})
 

@@ -44,6 +44,9 @@ type Engine struct {
 	// Jitter buffer for smoothing playback
 	jitter *JitterBuffer
 
+	// yt-dlp binary path (managed binary, not PATH lookup)
+	ytDlpPath string
+
 	// FFmpeg process
 	cmd     *exec.Cmd
 	tmpFile string
@@ -75,7 +78,7 @@ type Engine struct {
 }
 
 // New creates a new Engine ready to play.
-func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs, bufferFrames int) *Engine {
+func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs, bufferFrames int, ytDlpPath string) *Engine {
 	channels := 1
 	bytesPerFrame := 1920
 	samplesPerFrame := 960
@@ -106,6 +109,7 @@ func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs, bufferFrames int
 	return &Engine{
 		sink:            volSink,
 		jitter:          nil, // only set if jitter buffer is used
+		ytDlpPath:       ytDlpPath,
 		stopCh:          make(chan struct{}),
 		doneCh:          make(chan struct{}),
 		channels:        channels,
@@ -147,7 +151,7 @@ func (e *Engine) Start(source string) error {
 		}
 		tmpPath = tmpFile.Name()
 
-		ytDlpCmd := exec.Command("yt-dlp", "-f", "ba",
+		ytDlpCmd := exec.Command(e.ytDlpPath, "-f", "ba",
 			"--no-playlist", "--restrict-filenames",
 			"--no-progress", "--no-warnings", "-q",
 			"-o", "-", ytURL)

@@ -35,6 +35,7 @@ type Server struct {
 	engine      *audio.Engine
 	musicDir    string
 	probeCmd    string
+	ytDlpPath   string
 	sourceChain *source.Chain // resolver chain for URL resolution
 	mux         *http.ServeMux
 }
@@ -49,6 +50,7 @@ type Config struct {
 	Engine      *audio.Engine
 	MusicDir    string
 	ProbeCmd    string
+	YtDlpPath   string
 	SourceChain *source.Chain // resolver chain for URL resolution
 }
 
@@ -67,6 +69,7 @@ func New(cfg Config) *Server {
 		engine:      cfg.Engine,
 		musicDir:    cfg.MusicDir,
 		probeCmd:    cfg.ProbeCmd,
+		ytDlpPath:   cfg.YtDlpPath,
 		sourceChain: cfg.SourceChain,
 		mux:         http.NewServeMux(),
 	}
@@ -575,7 +578,7 @@ func (s *Server) handleAddURL(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Try to extract thumbnail
-		if thumb, err := extractThumbnail(req.URL, s.probeCmd); err == nil {
+		if thumb, err := extractThumbnail(req.URL, s.ytDlpPath); err == nil {
 			track.Thumbnail = thumb
 		}
 
