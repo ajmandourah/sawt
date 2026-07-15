@@ -866,6 +866,12 @@
               <span class="text-[10px] font-medium">Upload</span>
             </button>
           </div>
+          <div class="text-center pb-1">
+            <span
+              id="version-tag-mobile"
+              class="text-[9px] text-zinc-600 font-mono"
+            ></span>
+          </div>
         </nav>
       </main>
     </div>
@@ -1706,10 +1712,12 @@
             label.className = "text-zinc-500";
             label.textContent = "Idle";
           }
-          // Show version in sidebar footer
+          // Show version in sidebar footer and mobile nav
           if (data.version) {
-            const verEl = document.getElementById("version-tag");
-            if (verEl) verEl.textContent = data.version;
+            for (const id of ["version-tag", "version-tag-mobile"]) {
+              const verEl = document.getElementById(id);
+              if (verEl) verEl.textContent = data.version;
+            }
           }
         } catch (err) {
           const status = document.getElementById("connection-status");
