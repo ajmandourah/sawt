@@ -16,9 +16,9 @@ RUN go mod download
 # Copy source
 COPY . .
 
-# Build the binary
+# Build the binary (inject version from git tag at build time)
 ENV GOTOOLCHAIN=auto
-RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o /sawt ./cmd/sawt/
+RUN CGO_ENABLED=1 go build -ldflags="-s -w -X main.version=$(git describe --tags --always --dirty)" -o /sawt ./cmd/sawt/
 
 # ---- Runtime stage ----
 FROM debian:bookworm-slim

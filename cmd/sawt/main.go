@@ -26,11 +26,18 @@ import (
 	"strconv"
 )
 
+// version is set at build time via -ldflags "-X main.version=...".
+// Falls back to git describe --tags at runtime if not set.
+var version string
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.SetOutput(os.Stderr)
 
-	version := gitVersion()
+	// If version was not set via -ldflags, try git describe at runtime.
+	if version == "" {
+		version = gitVersion()
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
