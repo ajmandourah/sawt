@@ -87,7 +87,11 @@ func main() {
 	// 1. LocalResolver — files & directories
 	// 2. YtDlpResolver — YouTube, SoundCloud, etc. (tried before DirectResolver)
 	// 3. DirectResolver — plain HTTP streams (fallback if yt-dlp can't resolve)
+	// The logger callback sends progress messages to Mumble chat.
 	chain := source.NewChain(
+		func(msg string) {
+			client.SendMessage(msg)
+		},
 		&source.LocalResolver{},
 		source.NewYtDlpResolver(ytDlpManager),
 		&source.DirectResolver{},
@@ -114,7 +118,7 @@ func main() {
 	apiStore := store.New(cfg.MusicDir, "ffprobe", cfg.DataDir)
 	// Load persisted data
 	apiStore.LoadPlaylists(filepath.Join(cfg.DataDir, "playlists.json"))
-	apiStore.LoadURLs(filepath.Join(cfg.DataDir, "urls.json"))
+	// LoadURLs is already called internally by store.New()
 
 	// Create and start the WebUI server
 	webuiSrv := api.New(api.Config{

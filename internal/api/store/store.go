@@ -408,8 +408,10 @@ func (s *Store) LoadURLs(path string) error {
 		return nil // Don't fail, just reset
 	}
 	for _, t := range urlTracks {
-		s.tracks[t.ID] = t
-		s.trackOrder = append(s.trackOrder, t.ID)
+		if _, exists := s.tracks[t.ID]; !exists {
+			s.tracks[t.ID] = t
+			s.trackOrder = append(s.trackOrder, t.ID)
+		}
 	}
 	log.Printf("Store: loaded %d URLs from %s", len(urlTracks), path)
 	return nil

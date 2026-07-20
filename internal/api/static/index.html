@@ -716,66 +716,15 @@
           </section>
         </div>
 
-        <!-- ===== MOBILE VOLUME BAR ===== -->
-        <div
-          class="md:hidden fixed bottom-14 left-0 right-0 bg-zinc-900/90 glass border-t border-zinc-800/50 z-40 px-4 py-2"
-        >
-          <div class="flex items-center gap-3">
-            <button
-              onclick="toggleMute()"
-              class="p-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-400 hover:text-zinc-200 transition-all duration-200"
-              title="Mute/Unmute"
-            >
-              <svg
-                id="icon-volume-on-mobile"
-                class="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                viewBox="0 0 24 24"
-              >
-                <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                <path d="M15.54 8.46a5 5 0 010 7.07" />
-                <path d="M19.07 4.93a10 10 0 010 14.14" />
-              </svg>
-              <svg
-                id="icon-volume-off-mobile"
-                class="w-5 h-5 hidden"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                viewBox="0 0 24 24"
-              >
-                <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                <path d="M23 9l-6 6M17 9l6 6" />
-              </svg>
-            </button>
-            <input
-              type="range"
-              id="volume-slider-mobile"
-              min="0"
-              max="200"
-              value="50"
-              class="flex-1 h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer w-1"
-              oninput="setVolume(this.value)"
-            />
-            <span
-              id="volume-label-mobile"
-              class="text-xs font-mono text-zinc-500 w-10 text-right"
-              >50%</span
-            >
-          </div>
-        </div>
-
-        <!-- ===== MOBILE BOTTOM NAV ===== -->
+        <!-- ===== MOBILE BOTTOM NAV (with volume) ===== -->
         <nav
           class="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-900/90 glass border-t border-zinc-800/50 z-50"
         >
-          <div class="flex items-center justify-around py-2">
+          <div class="flex items-center justify-around py-1.5">
             <button
               onclick="switchTab('library')"
               data-tab="library"
-              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
+              class="mob-nav-item flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all duration-200 text-zinc-500"
             >
               <svg
                 class="w-5 h-5"
@@ -793,7 +742,7 @@
             <button
               onclick="switchTab('queue')"
               data-tab="queue"
-              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
+              class="mob-nav-item flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all duration-200 text-zinc-500"
             >
               <svg
                 class="w-5 h-5"
@@ -816,7 +765,7 @@
             <button
               onclick="switchTab('playlists')"
               data-tab="playlists"
-              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
+              class="mob-nav-item flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all duration-200 text-zinc-500"
             >
               <svg
                 class="w-5 h-5"
@@ -834,7 +783,7 @@
             <button
               onclick="switchTab('history')"
               data-tab="history"
-              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
+              class="mob-nav-item flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all duration-200 text-zinc-500"
             >
               <svg
                 class="w-5 h-5"
@@ -847,24 +796,52 @@
               </svg>
               <span class="text-[10px] font-medium">History</span>
             </button>
-            <button
-              onclick="switchTab('upload')"
-              data-tab="upload"
-              class="mob-nav-item flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-all duration-200 text-zinc-500"
-            >
-              <svg
-                class="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                viewBox="0 0 24 24"
+            <!-- Volume Control (integrated into nav) -->
+            <div class="flex items-center gap-1.5 px-2">
+              <button
+                onclick="toggleMute()"
+                class="p-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-400 hover:text-zinc-200 transition-all duration-200"
+                title="Mute/Unmute"
               >
-                <path
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                />
-              </svg>
-              <span class="text-[10px] font-medium">Upload</span>
-            </button>
+                <svg
+                  id="icon-volume-on-mobile"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                  <path d="M15.54 8.46a5 5 0 010 7.07" />
+                  <path d="M19.07 4.93a10 10 0 010 14.14" />
+                </svg>
+                <svg
+                  id="icon-volume-off-mobile"
+                  class="w-4 h-4 hidden"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                  <path d="M23 9l-6 6M17 9l6 6" />
+                </svg>
+              </button>
+              <input
+                type="range"
+                id="volume-slider-mobile"
+                min="0"
+                max="200"
+                value="50"
+                class="w-16 h-1 bg-zinc-800 rounded-full appearance-none cursor-pointer"
+                oninput="setVolume(this.value)"
+              />
+              <span
+                id="volume-label-mobile"
+                class="text-[9px] font-mono text-zinc-500 w-6 text-right"
+                >50</span
+              >
+            </div>
           </div>
           <div class="text-center pb-1">
             <span
@@ -1148,10 +1125,17 @@
       //  ACTIONS
       // ============================================================
       async function playNow(trackId) {
+        const track = allTracks.find((t) => t.id === trackId);
+        if (!track) return;
+        // Disable play button to prevent double-clicks during resolution
+        const playBtn = document.getElementById("btn-play");
+        if (playBtn) {
+          playBtn.disabled = true;
+          playBtn.classList.add("opacity-50", "cursor-not-allowed");
+        }
+        toast(`⏳ Resolving: ${track.name}…`, "info");
         try {
           const res = await postAPI("/play", { id: trackId });
-          const track = allTracks.find((t) => t.id === trackId);
-          if (!track) return;
           nowPlaying = { ...track, id: trackId };
           isPlaying = true;
           totalSeconds = track.seconds || 0;
@@ -1159,9 +1143,14 @@
           updateNowPlaying();
           startProgress();
           switchTab("queue");
-          toast(`Now playing: ${track.name}`, "info");
+          toast(`🎵 Now playing: ${track.name}`, "success");
         } catch (err) {
-          toast(`Error: ${err.message}`, "error");
+          toast(`❌ Error: ${err.message}`, "error");
+        } finally {
+          if (playBtn) {
+            playBtn.disabled = false;
+            playBtn.classList.remove("opacity-50", "cursor-not-allowed");
+          }
         }
       }
 
@@ -1211,15 +1200,16 @@
       }
 
       async function addToQueue(trackId) {
+        const track = allTracks.find((t) => t.id === trackId);
+        if (!track) return;
+        toast(`⏳ Resolving: ${track.name}…`, "info");
         try {
           await postAPI("/queue/add", { id: trackId });
-          const track = allTracks.find((t) => t.id === trackId);
-          if (!track) return;
           // Refresh queue from server
           await loadQueue();
-          toast(`Added to queue: ${track.name}`, "success");
+          toast(`✅ Added to queue: ${track.name}`, "success");
         } catch (err) {
-          toast(`Error: ${err.message}`, "error");
+          toast(`❌ Error: ${err.message}`, "error");
         }
       }
 
@@ -1572,16 +1562,15 @@
         else if (isYouTube) sourceLabel = "YouTube";
         else if (isDirectStream) sourceLabel = "direct stream";
 
-        toast(`Parsing ${sourceLabel} link…`, "info");
+        toast(`⏳ Resolving ${sourceLabel} link…`, "info");
 
         try {
           const res = await postAPI("/library/url", { url });
-          toast("Processing link…", "info");
           urlInput.value = "";
           await loadLibrary();
-          toast("Added successfully", "success");
+          toast("✅ Link added to library", "success");
         } catch (err) {
-          toast(`Error: ${err.message}`, "error");
+          toast(`❌ Error: ${err.message}`, "error");
         } finally {
           setTimeout(() => {
             urlAddLocked = false;
