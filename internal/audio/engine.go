@@ -1,5 +1,5 @@
 // Package audio manages the FFmpeg pipeline: spawning the process, reading PCM
-// from stdout, slicing into 20ms frames, and sending to Mumble.
+// from stdout, slicing into 10ms frames, and sending to Mumble.
 package audio
 
 import (
@@ -19,15 +19,15 @@ import (
 
 const (
 	SampleRate    = 48000
-	FrameDuration = 20 * time.Millisecond
+	FrameDuration = 10 * time.Millisecond
 	BitsPerSample = 16
 
 	// BufioSize is the internal buffer size for reading FFmpeg stdout.
 	BufioSize = 32 * 1024
 
-	// FrameChannelBuffer provides ~2.5s of decoupling between reader and sender.
-	// Increased to 128 to absorb network jitter.
-	FrameChannelBuffer = 128
+	// FrameChannelBuffer provides ~2.56s of decoupling between reader and sender.
+	// 256 frames × 10ms = 2.56s to absorb network jitter.
+	FrameChannelBuffer = 256
 )
 
 // Sink abstracts the audio output destination (Mumble client).
@@ -80,12 +80,12 @@ type Engine struct {
 // New creates a new Engine ready to play.
 func New(sink Sink, stereo bool, jitterBuf bool, jitterDelayMs, bufferFrames int, ytDlpPath string) *Engine {
 	channels := 1
-	bytesPerFrame := 1920
-	samplesPerFrame := 960
+	bytesPerFrame := 960
+	samplesPerFrame := 480
 	if stereo {
 		channels = 2
-		bytesPerFrame = 3840
-		samplesPerFrame = 1920 // interleaved L/R
+		bytesPerFrame = 1920
+		samplesPerFrame = 960 // interleaved L/R
 	}
 
 	silence := make([]int16, samplesPerFrame)
@@ -277,7 +277,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		offset := 0
 		totalBytes := 0
 
-		// Throttle reader to match playback rate (50Hz = 20ms per frame)
+		// Throttle reader to match playback rate (100Hz = 10ms per frame)
 		readerTicker := time.NewTicker(FrameDuration)
 		defer readerTicker.Stop()
 
@@ -328,7 +328,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 		}
 	}()
 
-	// Playback loop: tick at 20ms, send frames
+	// Playback loop: tick at 10ms, send frames
 	frameCount := 0
 	for {
 		select {
@@ -341,7 +341,7 @@ func (e *Engine) runLoop(reader io.ReadCloser, stderrBuf *bytes.Buffer) {
 			case pcm, ok := <-pcmCh:
 				if !ok {
 					// Reader finished (track ended naturally)
-					log.Printf("Audio stream ended after %d frames (%.1fs)", frameCount, float64(frameCount)*0.02)
+					log.Printf("Audio stream ended after %d frames (%.1fs)", frameCount, float64(frameCount)*0.01)
 					<-readerDone
 					e.waitFFmpeg()
 					return
