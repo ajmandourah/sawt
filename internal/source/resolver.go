@@ -5,6 +5,7 @@ package source
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
@@ -95,6 +96,7 @@ func (c *Chain) resolveWithRetry(ctx context.Context, r Resolver, input string) 
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		if attempt > 0 {
 			delay := c.retryDelay * time.Duration(1<<uint(attempt-1)) // 2s, 4s, 8s
+			log.Printf("[resolver] Retry %d/%d for %s (wait %v)", attempt, c.maxRetries, resolverName(r), delay)
 			if c.logger != nil {
 				c.logger(fmt.Sprintf("🔄 Retry %d/%d for %s (%v wait)...", attempt, c.maxRetries, resolverName(r), delay))
 			}
@@ -109,8 +111,12 @@ func (c *Chain) resolveWithRetry(ctx context.Context, r Resolver, input string) 
 
 		src, err := r.Resolve(ctx, input)
 		if err == nil {
+			if attempt > 0 {
+				log.Printf("[resolver] Resolution succeeded on attempt %d", attempt+1)
+			}
 			return src, nil
 		}
+		log.Printf("[resolver] Attempt %d failed for %s: %v", attempt+1, resolverName(r), err)
 		lastErr = err
 	}
 	return nil, lastErr

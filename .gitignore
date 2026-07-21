@@ -22,6 +22,7 @@ Thumbs.db
 
 # Pi agent
 .pi/
+.pi-subagents/
 
 # Logs
 *.log

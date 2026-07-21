@@ -53,12 +53,14 @@ func (r *YtDlpResolver) Resolve(ctx context.Context, input string) (*ResolvedSou
 		"--no-playlist", "--restrict-filenames", "--no-warnings", url)
 	titleStderr := new(strings.Builder)
 	titleCmd.Stderr = titleStderr
-	if titleOut, err := titleCmd.Output(); err != nil {
-		log.Printf("yt-dlp title fetch failed for %s: %v (%s)", url, err, titleStderr.String())
-	} else {
-		if t := strings.TrimSpace(string(titleOut)); t != "" {
-			title = t
-		}
+	titleOut, err := titleCmd.Output()
+	if err != nil {
+		errMsg := fmt.Sprintf("yt-dlp title fetch failed for %s: %v (%s)", url, err, titleStderr.String())
+		log.Printf("ERROR: %s", errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+	if t := strings.TrimSpace(string(titleOut)); t != "" {
+		title = t
 	}
 
 	// Return the ORIGINAL URL — the engine will pipe yt-dlp → FFmpeg.
