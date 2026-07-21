@@ -5,9 +5,9 @@
 [![Go Version](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Sawt connects to your Mumble server, joins a channel, and streams music from local files, direct URLs, YouTube, SoundCloud, or any HTTP audio stream. Control it through chat commands in Mumble or the built-in web interface.
+Sawt is a music bot for mumble. it connects to your Mumble server, joins a channel, and streams music from local files, direct URLs, YouTube, SoundCloud, or any HTTP audio stream. you can Control it through chat commands in Mumble or the built-in web interface.
 
-One binary. Zero bloat. Runs on a 512MB VPS.
+I made it because most popular music bots for mumble are not maintained anymore. additionally most music bots are written in python and need some serious performance boost. that's why I choose go as a backebd.
 
 ---
 
@@ -41,12 +41,6 @@ One binary. Zero bloat. Runs on a 512MB VPS.
 sudo apt install ffmpeg libopus-dev
 ```
 
-**Alpine:**
-
-```bash
-apk add ffmpeg libopus-dev
-```
-
 ---
 
 ## Quick Start
@@ -59,6 +53,7 @@ go build -o sawt ./cmd/sawt/
 ```
 
 The binary embeds the web UI, so no separate static file serving is needed.
+this is one of the great features as you literally only needs one executable file.
 
 ### Docker
 
@@ -272,6 +267,9 @@ Files are stored in the data directory (default `./data`):
 
 Files are saved every minute and on graceful shutdown. Corrupt files are reset automatically.
 
+### To do 
+a real database should be implemented instead of using json files.
+
 ---
 
 ## Architecture
@@ -291,18 +289,6 @@ The full architectural blueprint is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
-## Debug Tool
-
-A companion binary for testing Mumble connectivity without the full bot:
-
-```bash
-go build -o debug-mumble ./cmd/debug-mumble/
-./debug-mumble -server your-server:64738 -user "Debug" -pass yourpassword
-```
-
-Connects to Mumble, joins a channel, and prints all received text messages. Useful for verifying server connectivity, TLS, and permissions.
-
----
 
 ## License
 
